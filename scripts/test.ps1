@@ -98,6 +98,8 @@ $TestEnvironment = [ordered]@{
     'MODEL'                    = 'deepseek-flash'
     'NTFY_SERVER'              = 'http://127.0.0.1:1'
     'NTFY_TOPIC'               = 'personal-agent-test-topic'
+    # 固定为 1：避免开发机的用户环境变量把「默认一轮最多 1 个工具」的断言带偏。
+    'PERSONAL_AGENT_MAX_TOOL_CALLS_PER_TURN' = '1'
 }
 
 $Previous = @{}

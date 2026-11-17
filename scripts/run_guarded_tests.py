@@ -57,6 +57,9 @@ SAFE_ENVIRONMENT = {
     "NTFY_TOPIC": "personal-agent-test-topic",
     # 测试不启动平台 TTL 回收线程：后台线程会和临时目录清理抢时序。
     "PERSONAL_AGENT_PLATFORM_REAPER": "0",
+    # 宿主用户环境变量可能把默认工具上限改成 3（G2 演示遗留）；
+    # 测试固定为 1，避免结果依赖开发机的用户环境。
+    "PERSONAL_AGENT_MAX_TOOL_CALLS_PER_TURN": "1",
 }
 
 
