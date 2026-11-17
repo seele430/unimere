@@ -1,13 +1,16 @@
 // 产物卡片：一个文件夹里的"成果"，点开进侧栏预览。
 
+import type { ReactNode } from "react";
+import { File, FileText, FileType2, Image, Package } from "lucide-react";
+
 import type { ArtifactMeta } from "../chat/types";
 
-const KIND_ICON: Record<ArtifactMeta["kind"], string> = {
-  image: "🖼",
-  markdown: "📝",
-  text: "📄",
-  pdf: "📕",
-  other: "📦",
+const KIND_ICON: Record<ArtifactMeta["kind"], ReactNode> = {
+  image: <Image size={19} />,
+  markdown: <FileType2 size={19} />,
+  text: <FileText size={19} />,
+  pdf: <File size={19} />,
+  other: <Package size={19} />,
 };
 
 const KIND_TEXT: Record<ArtifactMeta["kind"], string> = {

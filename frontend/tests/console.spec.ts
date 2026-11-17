@@ -467,6 +467,62 @@ test("提交执行会带上沙箱与命令参数", async ({ page }) => {
   expectNoUnmockedApi(unexpected);
 });
 
+test("已 cordon 节点可以确认后恢复接新任务", async ({ page }) => {
+  const payload = buildSnapshot();
+  const nodes = payload.nodes as {
+    data: { rows: Array<{ cordoned: boolean; accepting: boolean }> };
+  };
+  nodes.data.rows[0].cordoned = true;
+  nodes.data.rows[0].accepting = false;
+  const unexpected = await openConsole(page, payload);
+  const calls: string[] = [];
+
+  await page.route("**/api/console/actions/nodes/node-alpha/uncordon", async (route) => {
+    calls.push(route.request().url());
+    await route.fulfill({
+      status: 202,
+      contentType: "application/json",
+      body: JSON.stringify({ node_id: "node-alpha", cordoned: false, accepting: true }),
+    });
+  });
+
+  await page.getByRole("button", { name: "节点", exact: true }).click();
+  await page.getByRole("button", { name: "uncordon node-alpha" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "恢复接新任务（uncordon）" });
+  await expect(dialog).toBeVisible();
+  expect(calls).toEqual([]);
+
+  await dialog.getByRole("button", { name: "确认恢复" }).click();
+
+  await expect(page.getByTestId("console-notice")).toContainText("恢复节点");
+  expect(calls.length).toBe(1);
+  expectNoUnmockedApi(unexpected);
+});
+
+test("沙箱回收后清空执行选择并禁止提交", async ({ page }) => {
+  const payload = buildSnapshot();
+  const sandboxes = payload.sandboxes as {
+    data: { rows: Array<{ state: string }> };
+  };
+  const unexpected = await openConsole(page, payload);
+
+  await page.getByRole("button", { name: "执行", exact: true }).click();
+  await page.getByTestId("exec-sandbox").selectOption("sbx-1");
+  await expect(page.getByTestId("exec-submit")).toBeEnabled();
+
+  sandboxes.data.rows[0].state = "reclaimed";
+  await page.getByRole("button", { name: "刷新", exact: true }).click();
+
+  await expect(page.getByTestId("exec-sandbox")).toHaveValue("");
+  await expect(page.getByTestId("exec-submit")).toBeDisabled();
+  await expect(
+    page.getByTestId("exec-sandbox").locator("option[value='sbx-1']"),
+  ).toHaveCount(0);
+
+  expectNoUnmockedApi(unexpected);
+});
+
 test("取消执行同样需要确认", async ({ page }) => {
   const payload = buildSnapshot();
   const executions = payload.executions as {

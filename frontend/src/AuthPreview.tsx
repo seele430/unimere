@@ -5,8 +5,10 @@ import {
 } from 'react'
 
 import type { FormEvent } from 'react'
+import { LogOut, ShieldCheck } from 'lucide-react'
 
 import App from './App.tsx'
+import BrandMark from './components/BrandMark.tsx'
 import './AuthPreview.css'
 
 
@@ -763,39 +765,40 @@ export default function AuthPreview() {
 
   if (session) {
     return (
-      <>
-        <App
-          key={session.user.id}
-          authToken={session.token}
-          userId={session.user.id}
-        />
-
-        <div className="pa-auth-session-panel">
-          <span className="pa-auth-session-user">
-            {session.user.username}
-            {' · '}
-            {roleName(session.user.role)}
-          </span>
-
-          <button
-            type="button"
-            className="pa-auth-logout-button"
-            disabled={loggingOut}
-            onClick={handleLogout}
-          >
-            {loggingOut ? '退出中…' : '退出登录'}
-          </button>
-
-          {logoutError && (
-            <span
-              className="pa-auth-logout-error"
-              role="alert"
-            >
-              {logoutError}
+      <App
+        key={session.user.id}
+        authToken={session.token}
+        userId={session.user.id}
+        account={(
+          <div className="pa-auth-session-panel">
+            <span className="pa-auth-avatar" aria-hidden="true">
+              {session.user.username.slice(0, 1).toUpperCase()}
             </span>
-          )}
-        </div>
-      </>
+            <span className="pa-auth-session-user">
+              <strong>{session.user.username}</strong>
+              <small>{roleName(session.user.role)}</small>
+            </span>
+
+            <button
+              type="button"
+              className="pa-auth-logout-button"
+              aria-label="退出登录"
+              title="退出登录"
+              disabled={loggingOut}
+              onClick={handleLogout}
+            >
+              <LogOut size={16} />
+              <span>{loggingOut ? '退出中…' : '退出'}</span>
+            </button>
+
+            {logoutError && (
+              <span className="pa-auth-logout-error" role="alert">
+                {logoutError}
+              </span>
+            )}
+          </div>
+        )}
+      />
     )
   }
 
@@ -810,36 +813,26 @@ export default function AuthPreview() {
 
         <aside className="pa-auth-hero">
           <div className="pa-auth-brand">
-            <div className="pa-auth-brand-icon">
-              ✳
-            </div>
-
+            <div className="pa-auth-brand-icon"><BrandMark size={34} /></div>
             <div>
               <strong>Personal Agent</strong>
-              <span>AI Workspace</span>
+              <span>LOCAL AI WORKSPACE</span>
             </div>
           </div>
 
           <div className="pa-auth-hero-content">
-            <div className="pa-auth-hero-label">
-              YOUR PERSONAL AI SPACE
+            <div className="pa-auth-hero-label">YOUR PERSONAL AI SPACE</div>
+            <h1>把想法，<br />变成下一步。</h1>
+            <p>对话、任务、记忆与产物，<br />都在你的本地工作空间里。</p>
+            <div className="pa-auth-proof" aria-label="产品特点">
+              <span><ShieldCheck size={16} />数据不出本机</span>
+              <span><ShieldCheck size={16} />工具调用留痕</span>
+              <span><ShieldCheck size={16} />每步都可核对</span>
             </div>
-
-            <h1>
-              让灵感，
-              <br />
-              从这里开始。
-            </h1>
-
-            <p>
-              一个可靠、私密、持续成长的
-              <br />
-              个人 AI 工作空间。
-            </p>
           </div>
 
           <div className="pa-auth-hero-footer">
-            Personal Agent · Development Preview
+            PERSONAL AGENT · PRIVATE BY DESIGN
           </div>
 
           <div
@@ -858,7 +851,7 @@ export default function AuthPreview() {
           <div className="pa-auth-form-container">
 
             <div className="pa-auth-mobile-brand">
-              ✳ Personal Agent
+              <BrandMark size={25} /> Personal Agent
             </div>
 
             <div className="pa-auth-eyebrow">
@@ -1098,7 +1091,7 @@ export default function AuthPreview() {
 
 
             <div className="pa-auth-note">
-              <span aria-hidden="true">◇</span>
+              <ShieldCheck size={15} aria-hidden="true" />
               {registrationOpen
                 ? '首次运行 · 站长账号只能创建一次'
                 : resetMode

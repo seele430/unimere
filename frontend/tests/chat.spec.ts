@@ -77,6 +77,8 @@ async function expectUnconfirmed(page: Page): Promise<void> {
 
   await expect(errorAlert).toBeVisible();
   await expect(errorAlert).toContainText("请求结果尚未确认");
+  await expect(errorAlert).toHaveClass(/reply-recovery/);
+  await expect(page.locator(".error-box")).toHaveCount(0);
 }
 
 
@@ -250,7 +252,7 @@ test.describe("Personal Agent Chat", () => {
     await expectUnconfirmed(page);
 
     await expect(
-      page.getByRole("button", { name: "查询结果" }),
+      page.getByRole("button", { name: "获取上一条 AI 回复" }),
     ).toBeVisible();
 
     expectNoUnmockedApi(unexpected);

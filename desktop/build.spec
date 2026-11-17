@@ -89,7 +89,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=os.path.join(PROJECT_ROOT, "desktop", "icon.ico"),
+    icon=os.path.join(PROJECT_ROOT, "desktop", "personal-agent-icon.ico"),
 )
 
 coll = COLLECT(

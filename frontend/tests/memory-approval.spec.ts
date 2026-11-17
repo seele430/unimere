@@ -1,65 +1,109 @@
 import { test, expect, type Page } from "@playwright/test";
 
-const USERNAME = "owner";
-const PASSWORD = "test-password-123";
+import {
+  blockUnmockedApi,
+  expectNoUnmockedApi,
+  installAuthMocks,
+} from "./support/mockAuth";
+
+const TEST_TOKEN = "playwright-memory-auto-token";
+const TEST_USER = {
+  id: "playwright-memory-auto-user",
+  username: "memory-auto",
+  role: "member",
+  active: true,
+};
+
+async function setupPage(page: Page) {
+  const unexpected = await blockUnmockedApi(page);
+  await installAuthMocks(page, TEST_TOKEN, TEST_USER);
+  const items: Array<Record<string, unknown>> = [];
+
+  await page.route("**/api/chat", async (route) => {
+    const payload = route.request().postDataJSON() as { message?: string };
+    const message = payload.message ?? "";
+    if (message.startsWith("记住：")) {
+      const text = message.slice(3);
+      items.push({
+        id: 1,
+        key: "response.language",
+        kind: "constraint",
+        layer: "identity",
+        text,
+        trust: "user_confirmed",
+        source_ref: "chat:req-auto",
+        source_session_id: null,
+        context_usage: "always",
+        status: "active",
+        valid_from: "2026-11-16T00:00:00+00:00",
+        valid_to: null,
+        supersedes_id: null,
+        created_at: "2026-11-16T00:00:00+00:00",
+        updated_at: "2026-11-16T00:00:00+00:00",
+      });
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ status: "completed", reply: "好的。" }),
+    });
+  });
+
+  await page.route("**/api/memory/items?*", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        mode: "list",
+        items,
+        total: items.length,
+        limit: 20,
+        offset: 0,
+        has_more: false,
+      }),
+    });
+  });
+
+  return { unexpected, items };
+}
 
 async function login(page: Page): Promise<void> {
   await page.goto("/login");
-  await page.locator("#pa-login-username").fill(USERNAME);
-  await page.locator("#pa-login-password").fill(PASSWORD);
+  await page.locator("#pa-login-username").fill(TEST_USER.username);
+  await page.locator("#pa-login-password").fill("PlaywrightTestPassword2026!");
   await page.getByRole("button", { name: /登录工作空间/ }).click();
   await expect(page.getByRole("textbox", { name: "输入聊天消息" })).toBeVisible();
-}
-
-async function memoryTexts(page: Page, query: string): Promise<string[]> {
-  return page.evaluate(async (search) => {
-    const token = window.sessionStorage.getItem("personal-agent-auth-token");
-    const response = await fetch(`/api/memory/items?query=${encodeURIComponent(search)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (!response.ok) {
-      throw new Error(`memory query failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return (data.items ?? []).map((item: { text: string }) => item.text);
-  }, query);
 }
 
 async function send(page: Page, text: string): Promise<void> {
   const input = page.getByRole("textbox", { name: "输入聊天消息" });
   await input.fill(text);
   await input.press("Enter");
+  await expect(page.getByText("好的。", { exact: true })).toBeVisible();
 }
 
-test.describe("记忆审批浏览器闭环", () => {
-  test("批准后恰好写入一条", async ({ page }) => {
+test.describe("长期记忆自动捕获边界", () => {
+  test("明确记住不需要旧工具审批，并可在长期记忆中查看", async ({ page }) => {
+    const { unexpected, items } = await setupPage(page);
     await login(page);
-    await send(page, "记住：12 月 1 日交项目");
+    await send(page, "记住：以后用中文回答");
 
-    const dialog = page.getByRole("alertdialog", { name: "工具审批" });
-    await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText("memory_remember");
-    expect(await memoryTexts(page, "12 月 1 日")).toEqual([]);
-
-    await page.getByRole("button", { name: "批准执行" }).click();
-
-    await expect
-      .poll(async () => (await memoryTexts(page, "12 月 1 日")).length, { timeout: 20000 })
-      .toBe(1);
+    await expect(page.getByRole("alertdialog", { name: "工具审批" })).toHaveCount(0);
+    expect(items).toHaveLength(1);
+    await page.getByRole("button", { name: "长期记忆" }).click();
+    await expect(page.getByRole("button", { name: "以后用中文回答" })).toBeVisible();
+    await expect(page.getByRole("table").getByText("新对话自动使用")).toBeVisible();
+    expectNoUnmockedApi(unexpected);
   });
 
-  test("拒绝后零写入", async ({ page }) => {
+  test("普通聊天不会写入长期记忆", async ({ page }) => {
+    const { unexpected, items } = await setupPage(page);
     await login(page);
-    const before = (await memoryTexts(page, "测试记住")).length;
-    await send(page, "记住：拒绝写入的测试内容");
+    await send(page, "今天需要写一份周报");
 
-    const dialog = page.getByRole("alertdialog", { name: "工具审批" });
-    await expect(dialog).toBeVisible();
-    await page.getByRole("button", { name: "拒绝" }).click();
-    await expect(dialog).toBeHidden();
-
-    expect((await memoryTexts(page, "测试记住")).length).toBe(before);
+    expect(items).toHaveLength(0);
+    await page.getByRole("button", { name: "长期记忆" }).click();
+    await expect(page.getByText("全部暂无记录")).toBeVisible();
+    expectNoUnmockedApi(unexpected);
   });
 });

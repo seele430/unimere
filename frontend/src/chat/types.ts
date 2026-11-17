@@ -18,6 +18,7 @@ export type Message = {
 
 export type ChatResponse = {
   request_id?: string;
+  session_id?: string;
   status?: string;
   reply?: string | null;
   code?: string;

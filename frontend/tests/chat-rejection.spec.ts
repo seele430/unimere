@@ -88,7 +88,7 @@ test.describe("Chat Quota Rejections", () => {
     ).toHaveText("未发送成功 · AI 未执行");
 
     await expect(
-      page.getByRole("button", { name: "查询结果" }),
+      page.getByRole("button", { name: "获取上一条 AI 回复" }),
     ).toHaveCount(0);
 
     expect(requests).toBe(1);
@@ -108,7 +108,7 @@ test.describe("Chat Quota Rejections", () => {
     ).toHaveText("未发送成功 · AI 未执行");
 
     await expect(
-      page.getByRole("button", { name: "查询结果" }),
+      page.getByRole("button", { name: "获取上一条 AI 回复" }),
     ).toHaveCount(0);
 
     expect(requests).toBe(1);
@@ -145,7 +145,7 @@ test.describe("Chat Quota Rejections", () => {
     ).toHaveText("未发送成功 · AI 未执行");
 
     await expect(
-      page.getByRole("button", { name: "查询结果" }),
+      page.getByRole("button", { name: "获取上一条 AI 回复" }),
     ).toHaveCount(0);
 
     expectNoUnmockedApi(unexpected);
@@ -176,7 +176,7 @@ test.describe("Chat Quota Rejections", () => {
     ).toHaveText("请求结果尚未确认");
 
     await expect(
-      page.getByRole("button", { name: "查询结果" }),
+      page.getByRole("button", { name: "获取上一条 AI 回复" }),
     ).toBeVisible();
 
     await expect(

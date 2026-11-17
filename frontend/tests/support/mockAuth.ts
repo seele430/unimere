@@ -173,6 +173,15 @@ export async function installAuthMocks(
   // 但兜底放着可以让所有用例共用同一套 setup。
   await installInboxMocks(page);
 
+  // 会话控件在登录后读取网页与 QQ 历史；默认空列表，专项用例可覆盖。
+  await page.route("**/api/sessions", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ web_sessions: [], qq_sessions: [] }),
+    }),
+  );
+
   // W4：产物条在已登录页面一打开就会取列表，默认空。
   await installArtifactMocks(page);
   await installActivityTimelineMocks(page);

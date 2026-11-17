@@ -5,8 +5,24 @@ import {
   useState,
   type FormEvent,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
+import {
+  BellRing,
+  Brain,
+  ChartNoAxesColumnIncreasing,
+  FileVideo2,
+  History,
+  ImagePlus,
+  ListTodo,
+  MessageSquareText,
+  PanelLeftClose,
+  PanelLeftOpen,
+  ServerCog,
+  ShieldCheck,
+} from "lucide-react";
 
+import BrandMark from "./components/BrandMark";
 import MemoryView from "./MemoryView";
 import PlatformView from "./PlatformView";
 import ActivityTimeline from "./components/ActivityTimeline";
@@ -14,6 +30,7 @@ import VideoSummaryPanel from "./components/VideoSummaryPanel";
 import ComfyImagePanel from "./components/ComfyImagePanel";
 import ArtifactSidebar from "./components/ArtifactSidebar";
 import { ChatMessages, Composer } from "./chat/ChatView";
+import SessionControls from "./chat/SessionControls";
 import {
   draftStorageKey,
   loadDraft,
@@ -303,10 +320,34 @@ async function readDetail(
   return fallback;
 }
 
+type View = "chat" | "reminders" | "quota" | "monitors" | "memory" | "platform";
+
 type AppProps = {
   authToken?: string;
   userId?: string;
+  account?: ReactNode;
 };
+
+const VIEW_META: Record<View, { title: string; eyebrow: string }> = {
+  chat: { title: "对话", eyebrow: "你的 AI 工作空间" },
+  reminders: { title: "提醒", eyebrow: "不错过每一件小事" },
+  quota: { title: "额度", eyebrow: "用量与预算" },
+  monitors: { title: "任务中心", eyebrow: "持续关注重要变化" },
+  memory: { title: "长期记忆", eyebrow: "只继承明确偏好与项目事实，版本可追溯" },
+  platform: { title: "平台", eyebrow: "本地节点与执行状态" },
+};
+
+function sessionStorageKey(userId?: string): string {
+  return `personal-agent-user-${userId || "dev"}-session`;
+}
+
+function loadSessionId(userId?: string): string {
+  try {
+    return sessionStorage.getItem(sessionStorageKey(userId)) ?? "";
+  } catch {
+    return "";
+  }
+}
 
 async function readJson(
   response: Response
@@ -321,10 +362,13 @@ async function readJson(
 }
 
 export default function App(
-  { authToken, userId }: AppProps = {}
+  { authToken, userId, account }: AppProps = {}
 ) {
   const [messages, setMessages] =
     useState<Message[]>(() => loadMessages(userId));
+  const [sessionId, setSessionId] = useState(() => loadSessionId(userId));
+  const [sessionSource, setSessionSource] = useState<"web" | "qq">("web");
+  const [sessionRefresh, setSessionRefresh] = useState(0);
 
   const [input, setInput] =
     useState(() => loadDraft(userId));
@@ -333,6 +377,10 @@ export default function App(
   const [activeTool, setActiveTool] = useState("");
   const [finishedTool, setFinishedTool] = useState("");
   const [error, setError] = useState("");
+  const [recoveryNotice, setRecoveryNotice] = useState<{
+    requestId: string;
+    message: string;
+  } | null>(null);
 
   // D13 审批门：服务端会停在等待状态，这里必须让用户真的能批准 / 拒绝。
   const [pendingApproval, setPendingApproval] = useState<{
@@ -350,6 +398,13 @@ export default function App(
   const [showTimeline, setShowTimeline] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
   const [showComfy, setShowComfy] = useState(false);
+
+  function openUtilityPanel(panel: "timeline" | "video" | "comfy") {
+    setShowTimeline(panel === "timeline");
+    setShowVideo(panel === "video");
+    setShowComfy(panel === "comfy");
+  }
+
   const [activeArtifactId, setActiveArtifactId] =
     useState<string | null>(null);
   const [activitySummary, setActivitySummary] =
@@ -445,17 +500,29 @@ export default function App(
   const activeArtifact =
     artifacts.find((item) => item.id === activeArtifactId) ?? null;
 
-  const [view, setView] = useState<
-    | "chat"
-    | "reminders"
-    | "quota"
-    | "monitors"
-    | "memory"
-    | "platform"
-  >("chat");
+  const [view, setView] = useState<View>("chat");
 
-  // 侧栏可收起：收起后主区占满，左上角留「☰」展开。
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // 窄屏默认收起导航，桌面保留完整工作区。
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() =>
+    window.matchMedia("(max-width: 760px)").matches
+  );
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 760px)");
+    const handleChange = (event: MediaQueryListEvent) => {
+      if (event.matches) setSidebarCollapsed(true);
+    };
+
+    media.addEventListener("change", handleChange);
+    return () => media.removeEventListener("change", handleChange);
+  }, []);
+
+  function navigate(nextView: View) {
+    setView(nextView);
+    if (window.matchMedia("(max-width: 760px)").matches) {
+      setSidebarCollapsed(true);
+    }
+  }
 
   const [quota, setQuota] = useState<QuotaReport | null>(
     null
@@ -563,7 +630,8 @@ export default function App(
       )
     );
 
-    setError(`请求结果尚未确认：${detail}`);
+    setError("");
+    setRecoveryNotice({ requestId, message: detail });
   }
 
   // ========================================
@@ -608,6 +676,11 @@ export default function App(
       setError(
         "全站过去 24 小时的 AI 预算已用完。" +
           "这条消息没有调用 AI，已恢复到输入框，可稍后手动发送。"
+      );
+    } else if (code === "pricing_unavailable") {
+      setError(
+        "当前模型没有经过核实的价格配置，已暂停新的 AI 请求。" +
+          "这条消息没有调用 AI，已恢复到输入框。"
       );
     } else {
       setError(
@@ -655,6 +728,9 @@ export default function App(
     });
 
     setError("");
+    setRecoveryNotice((current) =>
+      current?.requestId === requestId ? null : current
+    );
   }
 
   // ========================================
@@ -707,6 +783,7 @@ export default function App(
           result.status === "completed" &&
           typeof result.reply === "string"
         ) {
+          if (result.session_id) activateSession(result.session_id);
           finishRequest(requestId, result.reply);
           return;
         }
@@ -730,14 +807,15 @@ export default function App(
         }
       }
 
-      setError(
-        "服务器仍在处理该消息。" +
-          "稍后点击“查询结果”，无需重复发送。"
-      );
+      setError("");
+      setRecoveryNotice({
+        requestId,
+        message: "服务器仍在处理该消息。稍后获取回复即可，无需重复发送。",
+      });
     } catch {
       markUnknown(
         requestId,
-        "无法查询服务器状态。请稍后点击“查询结果”。"
+        "无法查询服务器状态。请稍后点击“获取回复”。"
       );
     } finally {
       checkingIds.current.delete(requestId);
@@ -767,6 +845,13 @@ export default function App(
     });
 
     // 仅在页面首次打开时恢复
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const savedSession = loadSessionId(userId);
+    if (authToken && savedSession) void openSession(savedSession);
+    // 只恢复页面打开时所在的会话。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -861,12 +946,78 @@ export default function App(
     return () => window.removeEventListener("keydown", onEscape);
   }, [authToken]);
 
+  function activateSession(id: string, source: "web" | "qq" = "web") {
+    if (!id) return;
+    setSessionId(id);
+    setSessionSource(source);
+    try {
+      sessionStorage.setItem(sessionStorageKey(userId), id);
+    } catch {
+      // 服务端会话已经保存，浏览器缓存失败不影响续聊。
+    }
+    setSessionRefresh((value) => value + 1);
+  }
+
+  async function openSession(id: string) {
+    if (!id || sendingLock.current) return;
+    try {
+      const response = await fetch(`/api/sessions/${encodeURIComponent(id)}`, {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error("对话不存在、已删除或为只读记录");
+      const data = await response.json() as {
+        session?: { source?: "web" | "qq" };
+        read_only?: boolean;
+        messages?: Array<{
+          id: number;
+          role: "user" | "assistant" | "system";
+          content: string;
+          message_id: string;
+        }>;
+      };
+      const restored: Message[] = (data.messages ?? [])
+        .filter((item) => item.role === "user" || item.role === "assistant")
+        .map((item) => ({
+          id: `server-${item.id}`,
+          role: item.role as "user" | "assistant",
+          content: item.content,
+          status: "sent",
+          ...(item.role === "user"
+            ? { requestId: item.message_id }
+            : { replyTo: item.message_id }),
+        }));
+      setMessages(restored);
+      saveMessages(restored, userId);
+      setError("");
+      activateSession(id, data.session?.source === "qq" ? "qq" : "web");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "读取对话失败");
+    }
+  }
+
+  function startNewSession() {
+    if (sendingLock.current) return;
+    setMessages([]);
+    saveMessages([], userId);
+    setSessionId("");
+    setSessionSource("web");
+    setPendingApproval(null);
+    setError("");
+    setRecoveryNotice(null);
+    try {
+      sessionStorage.removeItem(sessionStorageKey(userId));
+    } catch {
+      // 新对话状态仍然有效。
+    }
+  }
+
   async function sendMessage(
     event: FormEvent<HTMLFormElement>
   ) {
     event.preventDefault();
     const text = input.trim();
-    if (!text || sendingLock.current) return;
+    if (!text || sendingLock.current || sessionSource === "qq") return;
 
     sendingLock.current = true;
     setSending(true);
@@ -898,7 +1049,12 @@ export default function App(
           Accept: "text/event-stream, application/json",
           ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
-        body: JSON.stringify({ message: text, request_id: requestId, stream: true }),
+        body: JSON.stringify({
+          message: text,
+          request_id: requestId,
+          session_id: sessionId || null,
+          stream: true,
+        }),
         signal: controller.signal,
       });
 
@@ -908,6 +1064,7 @@ export default function App(
         const decoder = new TextDecoder();
         let buffer = "";
         let terminal = false;
+        let streamSessionId = sessionId;
 
         const processBlock = (block: string) => {
           if (!block.trim()) return;
@@ -918,6 +1075,7 @@ export default function App(
           if (!data) return;
           const payload = JSON.parse(data) as {
             type?: string;
+            session_id?: string;
             text?: string;
             reply?: string;
             tool?: string;
@@ -925,6 +1083,14 @@ export default function App(
             preview?: string;
             decision?: string;
           };
+          if (
+            (payload.type === "run_started" || payload.type === "done") &&
+            payload.session_id &&
+            streamSessionId !== payload.session_id
+          ) {
+            streamSessionId = payload.session_id;
+            activateSession(streamSessionId);
+          }
           if (payload.type === "text_delta" && payload.text) {
             appendAssistantDelta(requestId, payload.text);
           } else if (payload.type === "tool_started") {
@@ -959,7 +1125,7 @@ export default function App(
             markCancelled(requestId);
           } else if (payload.type === "run_failed" || payload.type === "request_unknown") {
             terminal = true;
-            markUnknown(requestId, "服务没有确认最终结果，请先查询状态。");
+            markUnknown(requestId, "服务没有确认最终结果，请先获取回复。");
           }
         };
 
@@ -975,7 +1141,7 @@ export default function App(
           }
         }
         if (!terminal && !cancelledRequests.current.has(requestId)) {
-          markUnknown(requestId, "流式响应提前结束，请先查询状态。");
+          markUnknown(requestId, "流式响应提前结束，请先获取回复。");
         }
         return;
       }
@@ -986,15 +1152,16 @@ export default function App(
       } else if (response.status === 202 && result.status === "processing") {
         await queryStatus(requestId, true);
       } else if (response.ok && typeof result.reply === "string") {
+        if (result.session_id) activateSession(result.session_id);
         finishRequest(requestId, result.reply);
       } else {
-        markUnknown(requestId, "服务没有返回确认的结果，请先查询状态。");
+        markUnknown(requestId, "服务没有返回确认的结果，请先获取回复。");
       }
     } catch {
       if (cancelledRequests.current.has(requestId)) {
         markCancelled(requestId);
       } else {
-        markUnknown(requestId, "网络异常或等待超时，模型可能已执行，请先查询状态。");
+        markUnknown(requestId, "网络异常或等待超时，模型可能已执行，请先获取回复。");
       }
     } finally {
       window.clearTimeout(timeout);
@@ -1568,110 +1735,22 @@ export default function App(
 
   return (
     <div className="app">
-      <aside
-        className={`sidebar ${
-          sidebarCollapsed ? "collapsed" : ""
-        }`}
-      >
+      {!sidebarCollapsed && (
+        <button
+          type="button"
+          className="sidebar-backdrop"
+          aria-label="关闭导航"
+          onClick={() => setSidebarCollapsed(true)}
+        />
+      )}
+
+      <aside className={`sidebar ${sidebarCollapsed ? "collapsed" : ""}`}>
         <div className="brand">
-          <div className="brand-icon">✳</div>
-
-          <div>
+          <div className="brand-icon"><BrandMark size={30} /></div>
+          <div className="brand-copy">
             <strong>Personal Agent</strong>
-            <span>AI Workspace</span>
+            <span>LOCAL AI WORKSPACE</span>
           </div>
-        </div>
-
-        <div className="sidebar-section">
-          <p className="section-label">
-            工作空间
-          </p>
-
-          <button
-            type="button"
-            className={`nav-item ${
-              view === "chat" ? "selected" : ""
-            }`}
-            onClick={() => setView("chat")}
-            aria-pressed={view === "chat"}
-          >
-            <span className="nav-symbol">◻</span>
-            <span>对话</span>
-          </button>
-
-          <button
-            type="button"
-            className={`nav-item ${
-              view === "reminders" ? "selected" : ""
-            }`}
-            onClick={() => setView("reminders")}
-            aria-pressed={view === "reminders"}
-            aria-label="提醒"
-          >
-            <span className="nav-symbol">⏰</span>
-            <span>提醒</span>
-
-            {pendingCount > 0 && (
-              <small>{pendingCount}</small>
-            )}
-          </button>
-
-          <button
-            type="button"
-            className={`nav-item ${
-              view === "quota" ? "selected" : ""
-            }`}
-            onClick={() => setView("quota")}
-            aria-pressed={view === "quota"}
-            aria-label="额度"
-          >
-            <span className="nav-symbol">◔</span>
-            <span>额度</span>
-          </button>
-
-          <button
-            type="button"
-            className={`nav-item ${
-              view === "memory" ? "selected" : ""
-            }`}
-            onClick={() => setView("memory")}
-            aria-pressed={view === "memory"}
-            aria-label="记忆"
-          >
-            <span className="nav-symbol">▤</span>
-            <span>记忆</span>
-          </button>
-
-          <button
-            type="button"
-            className={`nav-item ${
-              view === "platform" ? "selected" : ""
-            }`}
-            onClick={() => setView("platform")}
-            aria-pressed={view === "platform"}
-            aria-label="平台"
-          >
-            <span className="nav-symbol">◈</span>
-            <span>平台</span>
-          </button>
-
-          <button
-            type="button"
-            className={`nav-item ${
-              view === "monitors" ? "selected" : ""
-            }`}
-            onClick={() => setView("monitors")}
-            aria-pressed={view === "monitors"}
-            aria-label="任务中心"
-          >
-            <span className="nav-symbol">☷</span>
-            <span>任务中心</span>
-          </button>
-
-        </div>
-
-        {/* 收起按钮放这儿：原来挤在标题旁边太抢眼 */}
-        <div className="sidebar-collapse-row">
           <button
             type="button"
             className="sidebar-toggle"
@@ -1679,32 +1758,136 @@ export default function App(
             aria-label="收起侧栏"
             title="收起侧栏"
           >
-            «
+            <PanelLeftClose size={18} />
           </button>
         </div>
 
-        <div className="sidebar-footer">
-          <div className="version">
-            Personal Agent · Dev
-          </div>
+        <nav className="sidebar-section" aria-label="工作空间导航">
+          <p className="section-label">工作空间</p>
 
-          <p>你的 AI 助手工作空间</p>
+          <button
+            type="button"
+            className={`nav-item ${view === "chat" ? "selected" : ""}`}
+            onClick={() => navigate("chat")}
+            aria-pressed={view === "chat"}
+          >
+            <MessageSquareText className="nav-symbol" size={18} />
+            <span>对话</span>
+          </button>
+
+          <button
+            type="button"
+            className={`nav-item ${view === "reminders" ? "selected" : ""}`}
+            onClick={() => navigate("reminders")}
+            aria-pressed={view === "reminders"}
+            aria-label="提醒"
+          >
+            <BellRing className="nav-symbol" size={18} />
+            <span>提醒</span>
+            {pendingCount > 0 && <small>{pendingCount}</small>}
+          </button>
+
+          <button
+            type="button"
+            className={`nav-item ${view === "monitors" ? "selected" : ""}`}
+            onClick={() => navigate("monitors")}
+            aria-pressed={view === "monitors"}
+            aria-label="任务中心"
+          >
+            <ListTodo className="nav-symbol" size={18} />
+            <span>任务中心</span>
+          </button>
+
+          <p className="section-label section-secondary">知识与系统</p>
+
+          <button
+            type="button"
+            className={`nav-item ${view === "memory" ? "selected" : ""}`}
+            onClick={() => navigate("memory")}
+            aria-pressed={view === "memory"}
+            aria-label="长期记忆"
+          >
+            <Brain className="nav-symbol" size={18} />
+            <span>长期记忆</span>
+          </button>
+
+          <button
+            type="button"
+            className={`nav-item ${view === "quota" ? "selected" : ""}`}
+            onClick={() => navigate("quota")}
+            aria-pressed={view === "quota"}
+            aria-label="额度"
+          >
+            <ChartNoAxesColumnIncreasing className="nav-symbol" size={18} />
+            <span>额度</span>
+          </button>
+
+          <button
+            type="button"
+            className={`nav-item ${view === "platform" ? "selected" : ""}`}
+            onClick={() => navigate("platform")}
+            aria-pressed={view === "platform"}
+            aria-label="平台"
+          >
+            <ServerCog className="nav-symbol" size={18} />
+            <span>平台</span>
+          </button>
+        </nav>
+
+        <div className="sidebar-footer">
+          <div className="local-storage-note">
+            <ShieldCheck size={17} />
+            <div><strong>本地优先</strong><span>数据留在这台设备</span></div>
+          </div>
+          {account ?? <div className="version">Personal Agent · Dev</div>}
         </div>
       </aside>
 
       <main className="main">
-        {/* 顶部那一栏已去掉；侧栏收起时用浮动按钮唤回 */}
-        {sidebarCollapsed && (
-          <button
-            type="button"
-            className="sidebar-float-toggle"
-            onClick={() => setSidebarCollapsed(false)}
-            aria-label="展开侧栏"
-            title="展开侧栏"
-          >
-            ☰
-          </button>
-        )}
+        <header className="workspace-topbar">
+          <div className="workspace-heading-wrap">
+            {sidebarCollapsed && (
+              <button
+                type="button"
+                className="sidebar-float-toggle"
+                onClick={() => setSidebarCollapsed(false)}
+                aria-label="展开侧栏"
+                title="展开侧栏"
+              >
+                <PanelLeftOpen size={19} />
+              </button>
+            )}
+            <div className="workspace-heading">
+              <span>{VIEW_META[view].eyebrow}</span>
+              <h1>{VIEW_META[view].title}</h1>
+            </div>
+          </div>
+
+          <div className="workspace-actions">
+            <span className="local-status"><i />本地运行</span>
+            {view === "chat" && (
+              <>
+                <SessionControls
+                  authToken={authToken}
+                  sessionId={sessionId}
+                  disabled={sending}
+                  refreshToken={sessionRefresh}
+                  onSelect={(id) => void openSession(id)}
+                  onNew={startNewSession}
+                />
+                <button type="button" className="tool-action timeline-toggle" onClick={() => openUtilityPanel("timeline")}>
+                  <History size={16} /><span>活动</span>
+                </button>
+                <button type="button" className="tool-action video-toggle" aria-label="视频" title="视频摘要" onClick={() => openUtilityPanel("video")}>
+                  <FileVideo2 size={16} /><span>视频摘要</span>
+                </button>
+                <button type="button" className="tool-action comfy-toggle" aria-label="图生图" title="图像工具" onClick={() => openUtilityPanel("comfy")}>
+                  <ImagePlus size={16} /><span>图像工具</span>
+                </button>
+              </>
+            )}
+          </div>
+        </header>
 
         {dueReminders.length > 0 && (
           <section
@@ -2181,7 +2364,13 @@ export default function App(
             )}
           </section>
         ) : view === "memory" ? (
-          <MemoryView authToken={authToken} />
+          <MemoryView
+            authToken={authToken}
+            onOpenSession={(sessionId) => {
+              void openSession(sessionId);
+              navigate("chat");
+            }}
+          />
         ) : view === "platform" ? (
           <PlatformView authToken={authToken} />
         ) : view === "reminders" ? (
@@ -2314,84 +2503,63 @@ export default function App(
           </section>
         ) : (
           <>
-        <ChatMessages
-          messages={messages}
-          pendingApproval={pendingApproval}
-          decideApproval={(decision) => void decideApproval(decision)}
-          sending={sending}
-          activeTool={activeTool || null}
-          finishedTool={finishedTool || null}
-          checkingId={checkingId}
-          queryStatus={(requestId) => void queryStatus(requestId)}
-          bottomRef={bottomRef}
-          artifacts={artifacts}
-          activeArtifactId={activeArtifactId}
-          onOpenArtifact={(artifactId) => setActiveArtifactId(artifactId)}
-          activity={activitySummary}
-        />
+            <ChatMessages
+              messages={messages}
+              pendingApproval={pendingApproval}
+              decideApproval={(decision) => void decideApproval(decision)}
+              sending={sending}
+              activeTool={activeTool || null}
+              finishedTool={finishedTool || null}
+              checkingId={checkingId}
+              queryStatus={(requestId) => void queryStatus(requestId)}
+              recoveryNotice={recoveryNotice}
+              bottomRef={bottomRef}
+              artifacts={artifacts}
+              activeArtifactId={activeArtifactId}
+              onOpenArtifact={(artifactId) => setActiveArtifactId(artifactId)}
+              onSuggestion={setInput}
+              activity={activitySummary}
+            />
 
-        <Composer
-          error={error}
-          input={input}
-          setInput={setInput}
-          sending={sending}
-          handleKeyDown={handleKeyDown}
-          sendMessage={sendMessage}
-          cancelActiveRun={cancelActiveRun}
-        />
+            <Composer
+              error={error}
+              input={input}
+              setInput={setInput}
+              sending={sending}
+              readOnly={sessionSource === "qq"}
+              handleKeyDown={handleKeyDown}
+              sendMessage={sendMessage}
+              cancelActiveRun={cancelActiveRun}
+            />
 
-        {activeArtifact && (
-          <ArtifactSidebar
-            artifact={activeArtifact}
-            authToken={authToken}
-            onClose={() => setActiveArtifactId(null)}
-          />
-        )}
+            {activeArtifact && (
+              <ArtifactSidebar
+                artifact={activeArtifact}
+                authToken={authToken}
+                onClose={() => setActiveArtifactId(null)}
+              />
+            )}
 
-        <button
-          type="button"
-          className="timeline-toggle"
-          onClick={() => setShowTimeline(true)}
-        >
-          活动
-        </button>
+            {showTimeline && (
+              <ActivityTimeline
+                authToken={authToken}
+                onClose={() => setShowTimeline(false)}
+              />
+            )}
 
-        {showTimeline && (
-          <ActivityTimeline
-            authToken={authToken}
-            onClose={() => setShowTimeline(false)}
-          />
-        )}
+            {showVideo && (
+              <VideoSummaryPanel
+                authToken={authToken}
+                onClose={() => setShowVideo(false)}
+              />
+            )}
 
-        <button
-          type="button"
-          className="video-toggle"
-          onClick={() => setShowVideo(true)}
-        >
-          视频
-        </button>
-
-        {showVideo && (
-          <VideoSummaryPanel
-            authToken={authToken}
-            onClose={() => setShowVideo(false)}
-          />
-        )}
-
-        <button
-          type="button"
-          className="comfy-toggle"
-          onClick={() => setShowComfy(true)}
-        >
-          图生图
-        </button>
-
-        {showComfy && (
-          <ComfyImagePanel
-            authToken={authToken}
-            onClose={() => setShowComfy(false)}
-          />
-        )}
+            {showComfy && (
+              <ComfyImagePanel
+                authToken={authToken}
+                onClose={() => setShowComfy(false)}
+              />
+            )}
           </>
         )}
       </main>

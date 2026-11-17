@@ -491,6 +491,19 @@ export default function PlatformView({ authToken }: { authToken?: string }) {
   const [execDetail, setExecDetail] = useState<ExecutionDetail | null>(null);
   const [execDetailBusy, setExecDetailBusy] = useState(false);
 
+  const executableSandboxes =
+    snapshot?.sandboxes.data?.rows.filter((item) =>
+      ["created", "idle", "running"].includes(item.state),
+    ) ?? [];
+  const execSandboxUsable = executableSandboxes.some(
+    (item) => item.id === execSandbox,
+  );
+
+  // 沙箱回收或进入失败态后，不允许沿用旧选择继续提交。
+  useEffect(() => {
+    if (execSandbox && !execSandboxUsable) setExecSandbox("");
+  }, [execSandbox, execSandboxUsable]);
+
   const load = useCallback(async () => {
     if (!authToken) return;
 
@@ -693,8 +706,9 @@ export default function PlatformView({ authToken }: { authToken?: string }) {
 
   return (
     <section
+      className="platform-panel"
       aria-label="平台控制台"
-      style={{ padding: "18px 20px", maxWidth: 1180, width: "100%", boxSizing: "border-box" }}
+      style={{ maxWidth: 1180, width: "100%", boxSizing: "border-box" }}
     >
       <header
         style={{
@@ -884,6 +898,28 @@ export default function PlatformView({ authToken }: { authToken?: string }) {
                               <td style={td}>
                                 {canWrite ? (
                                   <span style={{ display: "inline-flex", gap: 6 }}>
+                                    {node.cordoned ? (
+                                      <button
+                                        type="button"
+                                        aria-label={`uncordon ${node.node_id}`}
+                                        disabled={busy !== ""}
+                                        onClick={() =>
+                                          setConfirm({
+                                            title: "恢复接新任务（uncordon）",
+                                            message: `节点：${node.node_id}\n影响：取消 cordon；已有沙箱与执行不受影响。${node.node_id === "node_local" ? "\n本地节点会同时续上心跳。" : "\n若租约已过期，仍需节点恢复心跳。"}`,
+                                            confirmText: "确认恢复",
+                                            run: () =>
+                                              runAction("恢复节点", () =>
+                                                post(
+                                                  `/console/actions/nodes/${node.node_id}/uncordon`,
+                                                ),
+                                              ),
+                                          })
+                                        }
+                                      >
+                                        恢复
+                                      </button>
+                                    ) : null}
                                     <button
                                       type="button"
                                       aria-label={`cordon ${node.node_id}`}
@@ -1162,7 +1198,7 @@ export default function PlatformView({ authToken }: { authToken?: string }) {
                         style={{ display: "block", marginTop: 4, padding: "5px 8px" }}
                       >
                         <option value="">选择沙箱</option>
-                        {(sandboxes?.rows ?? []).map((item) => (
+                        {executableSandboxes.map((item) => (
                           <option key={item.id} value={item.id}>
                             {item.id}（{item.state}）
                           </option>
@@ -1186,7 +1222,7 @@ export default function PlatformView({ authToken }: { authToken?: string }) {
                     <button
                       data-testid="exec-submit"
                       type="button"
-                      disabled={execSandbox === "" || busy !== ""}
+                      disabled={!execSandboxUsable || busy !== ""}
                       onClick={() =>
                         runAction("提交执行", () =>
                           post("/console/actions/executions", {

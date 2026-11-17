@@ -69,6 +69,23 @@ test.describe("活动时间线", () => {
     await expect(panel.getByText("exec run-01")).toBeVisible();
   });
 
+  test("切换工具时只保留一个面板", async ({ page }) => {
+    await page.getByRole("button", { name: "活动" }).click();
+    await expect(page.getByTestId("activity-timeline")).toBeVisible();
+
+    await page.getByRole("button", { name: "视频" }).click();
+    await expect(page.getByTestId("video-panel")).toBeVisible();
+    await expect(page.getByTestId("activity-timeline")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "图生图" }).click();
+    await expect(page.getByTestId("comfy-panel")).toBeVisible();
+    await expect(page.getByTestId("video-panel")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "活动" }).click();
+    await expect(page.getByTestId("activity-timeline")).toBeVisible();
+    await expect(page.getByTestId("comfy-panel")).toHaveCount(0);
+  });
+
   test("可以关闭面板", async ({ page }) => {
     await page.getByRole("button", { name: "活动" }).click();
     await expect(page.getByTestId("activity-timeline")).toBeVisible();

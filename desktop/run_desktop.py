@@ -15,10 +15,15 @@
 开发模式也能直接跑：python desktop/run_desktop.py
 """
 
+import argparse
 import os
 import sys
 import threading
 import time
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 APP_NAME = "PersonalAgent"
 HOST = "127.0.0.1"
@@ -30,12 +35,12 @@ def _is_frozen() -> bool:
 
 
 def _data_dir() -> str:
-    """打包版写 %APPDATA%，开发版仍然用项目根（和 run-dev 一致）。"""
+    """打包版写 %APPDATA%，开发版使用项目 data 目录（和 run-dev 一致）。"""
     if _is_frozen():
         base = os.environ.get("APPDATA") or os.path.expanduser("~")
         path = os.path.join(base, APP_NAME)
     else:
-        path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 
     os.makedirs(path, exist_ok=True)
 
@@ -56,7 +61,8 @@ NTFY_TOPIC=
 
 
 def _prepare_env() -> None:
-    data = _data_dir()
+    data = os.environ.get("PERSONAL_AGENT_DATA_DIR") or _data_dir()
+    os.makedirs(data, exist_ok=True)
 
     os.environ.setdefault("PERSONAL_AGENT_DATA_DIR", data)
     os.chdir(data)
@@ -179,25 +185,46 @@ def _log(msg: str) -> None:
         pass
 
 
-def main() -> None:
-    if _run_edge_tts_cli():
-        return
+STARTUP_HTML = """<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center;
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif; color: #17243d;
+    background: radial-gradient(circle at 30% 20%, #eef1ff, #f7f9fd 55%, #eef2f8); }
+  main { text-align: center; }
+  .mark { width: 76px; height: 76px; margin: 0 auto 24px; display: grid;
+    place-items: center; border-radius: 22px; color: white; font-size: 28px;
+    font-weight: 750; letter-spacing: -2px;
+    background: linear-gradient(145deg, #25268d, #6835d2);
+    box-shadow: 0 18px 44px rgba(64, 45, 170, .22); }
+  h1 { margin: 0 0 12px; font-size: 28px; }
+  p { margin: 0; color: #758099; font-size: 15px; }
+  .dot { display: inline-block; width: 7px; height: 7px; margin-right: 9px;
+    border-radius: 50%; background: #6845d6; animation: pulse 1s infinite alternate; }
+  @keyframes pulse { to { opacity: .25; transform: scale(.75); } }
+</style>
+</head>
+<body><main><div class="mark">PA</div><h1>Personal Agent</h1>
+<p><span class="dot"></span>正在准备工作区，请稍候…</p></main></body>
+</html>"""
 
-    _log("boot start")
 
-    try:
-        _prepare_env()
-        _log(f"env ready, data={_data_dir()}")
-    except Exception as error:  # noqa: BLE001
-        _log(f"prepare_env FAILED: {error!r}")
-        raise
-
+def _initialize_window(window: "object") -> None:
+    """后台准备服务，窗口先出现，不再对着桌面等后端导入。"""
     try:
         _start_api()
         _log("api started")
     except Exception as error:  # noqa: BLE001
         _log(f"api FAILED: {error!r}")
-        raise
+        window.load_html(
+            "<html lang='zh-CN'><body style='font-family:sans-serif;padding:48px'>"
+            "<h2>Personal Agent 启动失败</h2><p>请查看数据目录中的 boot.log。</p>"
+            "</body></html>"
+        )
+        return
 
     try:
         _start_workers()
@@ -205,17 +232,50 @@ def main() -> None:
     except Exception as error:  # noqa: BLE001
         _log(f"workers FAILED: {error!r}")
 
+    window.load_url(f"http://{HOST}:{PORT}/")
+    _log("frontend loaded")
+
+
+def main() -> None:
+    global PORT
+
+    if _run_edge_tts_cli():
+        return
+
+    parser = argparse.ArgumentParser(description="启动 Personal Agent 桌面版")
+    parser.add_argument("--port", type=int, default=PORT, help="本地 API 端口")
+    parser.add_argument("--data-dir", default="", help="已有配置和数据目录")
+    args = parser.parse_args()
+    if not 1 <= args.port <= 65535:
+        parser.error("--port 必须在 1 到 65535 之间")
+    PORT = args.port
+    if args.data_dir:
+        os.environ["PERSONAL_AGENT_DATA_DIR"] = os.path.abspath(args.data_dir)
+
+    _log("boot start")
+
+    try:
+        _prepare_env()
+        _log(f"env ready, data={os.environ['PERSONAL_AGENT_DATA_DIR']}")
+    except Exception as error:  # noqa: BLE001
+        _log(f"prepare_env FAILED: {error!r}")
+        raise
+
     import webview  # noqa: PLC0415
 
     _log("creating window")
-
-    webview.create_window(
+    window = webview.create_window(
         "Personal Agent",
-        f"http://{HOST}:{PORT}",
+        html=STARTUP_HTML,
         width=1320,
         height=860,
         min_size=(980, 640),
     )
+    threading.Thread(
+        target=_initialize_window,
+        args=(window,),
+        daemon=True,
+    ).start()
 
     webview.start()
 

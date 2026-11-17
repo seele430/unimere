@@ -184,7 +184,7 @@ test.describe("Chat Idempotency", () => {
     expect(postCount).toBe(1);
     expect(originalId).toBeTruthy();
 
-    await page.getByRole("button", { name: "查询结果" }).click();
+    await page.getByRole("button", { name: "获取上一条 AI 回复" }).click();
 
     await expect(page.getByText("服务器已保存的原始回复")).toBeVisible();
 
