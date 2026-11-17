@@ -150,8 +150,17 @@ class MemoryServiceCase(unittest.TestCase):
 
 
     def test_remember_supersedes_resolved_current_not_max_id(self):
-        high = service.remember("u1", "高信任旧值", key="k", trust="user_confirmed")
-        low = service.remember("u1", "低信任新值", key="k", trust="model_inferred")
+        # 两条必须落在同一秒：resolve 是先比 valid_from、再比信任级别，
+        # 不钉住时钟的话，跨秒时后写的低信任值会按 valid_from 胜出（曾经偶发失败）。
+        clock = {"now": "2026-01-01T00:00:00Z"}
+
+        def fake_utc_now():
+            return clock["now"]
+
+        with patch("src.memory.store.utc_now", side_effect=fake_utc_now):
+            high = service.remember("u1", "高信任旧值", key="k", trust="user_confirmed")
+            low = service.remember("u1", "低信任新值", key="k", trust="model_inferred")
+
         resolved = service.list_current("u1")["items"][0]
         self.assertEqual(resolved["id"], high.id)
 
@@ -161,6 +170,22 @@ class MemoryServiceCase(unittest.TestCase):
         listing = service.list_current("u1")
         self.assertEqual(listing["total"], 1)
         self.assertEqual(listing["items"][0]["id"], new.id)
+
+    def test_cross_second_newest_valid_from_wins(self):
+        # 跨秒时规则 1 优先：后写的那条胜出，哪怕信任级别更低。
+        clock = {"now": "2026-01-01T00:00:00Z"}
+
+        def fake_utc_now():
+            return clock["now"]
+
+        with patch("src.memory.store.utc_now", side_effect=fake_utc_now):
+            old = service.remember("u1", "先写的高信任", key="k", trust="user_confirmed")
+            clock["now"] = "2026-01-01T00:00:01Z"
+            new = service.remember("u1", "后写的低信任", key="k", trust="model_inferred")
+
+        resolved = service.list_current("u1")["items"][0]
+        self.assertEqual(resolved["id"], new.id)
+        self.assertNotEqual(resolved["id"], old.id)
 
     def test_remember_valid_from_candidate_grouped(self):
         old = self.store.add_item(
