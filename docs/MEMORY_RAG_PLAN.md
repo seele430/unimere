@@ -1,6 +1,6 @@
 # 长期记忆 / 知识库（RAG）规划
 
-> 对应 `DEVELOPMENT_PLAN.md` 的 **M7（短期摘要 + 长期检索记忆）**。
+> 对应 `docs/plans/DEVELOPMENT_PLAN.md` 的 **M7（短期摘要 + 长期检索记忆）**。
 > 本文把 M7 拆成可验收的增量，并说明每一步**产出什么可验证的数字**。
 
 ## 0. 一句话
@@ -17,8 +17,8 @@
 | 每次聊天请求的上下文**只有 system + 当前这一条消息** | `src/agent.py:693-704` |
 | 会话历史只用于**界面恢复**，不回灌模型 | 前端 `sessionStorage` 键 `personal-agent-user-<id>-chat` |
 | 监控抓到的内容**只存标题和链接，不存正文** | `src/core/task_engine.py` 的 `seen_items(monitor_id, item_id, title, link, seen_at)` |
-| 计划里已写明方向：**相关记忆检索（PostgreSQL + pgvector），不把全部历史发送到模型** | `DEVELOPMENT_PLAN.md:40`，M7 同 |
-| 计划文档自己把"长期记忆"列在**尚未验证**清单里 | `DEVELOPMENT_PLAN.md:59` |
+| 计划里已写明方向：**相关记忆检索（PostgreSQL + pgvector），不把全部历史发送到模型** | `docs/plans/DEVELOPMENT_PLAN.md:40`，M7 同 |
+| 计划文档自己把"长期记忆"列在**尚未验证**清单里 | `docs/plans/DEVELOPMENT_PLAN.md:59` |
 
 **产品动机（不是技术堆料）**：现在监控能"告诉你发生了什么"，但**答不上"上周那篇讲了什么"** ——
 正文抓回来就丢了。把正文沉淀进知识库，"监控"就从事后通知升级为可检索的知识资产。

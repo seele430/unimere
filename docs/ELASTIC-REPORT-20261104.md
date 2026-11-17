@@ -25,7 +25,7 @@
 | T1 | 多节点模拟 | 同一进程内注册 3 个节点（容量可配），或用 3 个子进程 edge 上报心跳 | `scripts/demo_scheduling.py` | 3 节点能分流，cordon 后不再接活 | 现有 `pick_node()` | 0.5 天 |
 | T2 | 均衡度统计 | 连续创建 N 个沙箱，统计各节点活跃数、`1 - stdev/mean`、max/min | `docs/evidence/sched-balance.json` | 均衡度 ≥ 0.90（N=60） | T1 | 0.5 天 |
 | T3 | 调度时延 | 记录 create 请求到选定节点的耗时 | 同上 | 给 p50/p99 | T1 | 0.5 天 |
-| T4 | 压测脚本增强 | 支持 `--minutes 10`、资源采样（psutil，1s）、结果落 CSV | `scripts/bench_platform.py` 增强 | 单档 10 分钟不崩，CSV 含时间序列 | 无 | 0.5 天 |
+| T4 | 压测脚本增强 | 支持 `--minutes 10`、资源采样（psutil，1s）、结果落 CSV | `scripts/experiments/bench_platform.py` 增强 | 单档 10 分钟不崩，CSV 含时间序列 | 无 | 0.5 天 |
 | T5 | 正式压测 | 2/4/8/12 RPS × 10 min × 3 次 | `docs/bench/elastic-*.csv/json` | 每档 3 次，报中位数与区间 | T4 | 1 天（跑机） |
 | T6 | 饱和曲线 | X=offered RPS，双 Y=p99 与错误率，标拐点 | `docs/bench/elastic-curve.png` + `ELASTIC.md` | 拐点判据写在跑之前 | T5 | 0.5 天 |
 | T7 | 冷启动/回收 | create→ready、destroy→资源释放的耗时分布 | `docs/evidence/lifecycle-latency.json` | p50/p95/p99 齐全 | 无 | 0.5 天 |

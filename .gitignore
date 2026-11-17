@@ -80,3 +80,6 @@ docs/bench/bench-server.log
 
 # runtime data (QQ audit etc.)
 data/
+
+# Local frontend build backup (manual, not source)
+frontend/dist.bak-*/

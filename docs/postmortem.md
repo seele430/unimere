@@ -1,7 +1,7 @@
 # 复盘：默认节点租约过期，导致建沙箱永久失败
 
 - **日期**：2026-11-04
-- **发现方式**：D27 压测（`scripts/bench_platform.py`）第二轮启动时报错
+- **发现方式**：D27 压测（`scripts/experiments/bench_platform.py`）第二轮启动时报错
 - **严重度**：高 —— 任何闲置超过 30 秒的部署都无法再创建沙箱
 - **状态**：已修复 + 有回归测试
 
@@ -64,7 +64,7 @@ def ensure_default_node(self, *, now=None):
 
 1. 代码：`ensure_default_node` 续租（代际不变）。
 2. 测试：`tests/integration/test_default_node_renewal.py` 三条用例。
-3. 流程：压测脚本保留在 `scripts/bench_platform.py` —— 这次是它把问题顶出来的，
+3. 流程：压测脚本保留在 `scripts/experiments/bench_platform.py` —— 这次是它把问题顶出来的，
    以后每次大改都跑一轮。
 
 ## 教训

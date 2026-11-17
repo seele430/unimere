@@ -20,7 +20,7 @@ class RoutePipelineTest(unittest.TestCase):
             result = subprocess.run(
                 [
                     sys.executable,
-                    str(ROOT / "scripts" / "demo_route_pipeline.py"),
+                    str(ROOT / "scripts" / "demos" / "demo_route_pipeline.py"),
                     "--data-dir",
                     temp,
                 ],

@@ -33,7 +33,8 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 
 # 与 src/agent.py 同一条规则：tier1 沙箱子进程绝不读宿主 .env
 if os.getenv("PERSONAL_AGENT_TIER1") != "1":
-    load_dotenv(BASE_DIR / ".env")
+    load_dotenv(Path(os.getenv("PERSONAL_AGENT_DATA_DIR", BASE_DIR / "data")) / ".env")
+    load_dotenv(BASE_DIR / ".env")  # 兼容旧版根目录配置，不覆盖数据目录配置。
 
 
 DEFAULT_MODEL = "deepseek-flash"

@@ -655,11 +655,17 @@ class TestReminderChatHTTP(unittest.TestCase):
                 "list_reminders",
                 "cancel_reminder",
                 "update_reminder",
-                # D12：只把安全的只读沙箱工具暴露给模型
+                # 只读工具直接可用，写入、执行与联网工具均需单次审批
                 "read_file",
                 "list_dir",
-                # 记忆闭环：remember 需审批，recall 只读
-                "memory_remember",
+                "write_file",
+                "run_shell",
+                "run_python",
+                "http_get",
+                "http_download",
+                "csv_summarize",
+                "browser_preview",
+                # 明确表达由规则自动保存；模型只保留只读召回工具
                 "memory_recall",
             ],
         )

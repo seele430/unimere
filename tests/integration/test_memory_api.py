@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from src.auth_api import get_current_user
 from src.main import app
 from src.memory.store import MemoryStore
+from src.sessions import SessionStore
 
 
 class MemoryApiCase(unittest.TestCase):
@@ -18,6 +19,7 @@ class MemoryApiCase(unittest.TestCase):
         self._temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self._temporary.cleanup)
         self.store = MemoryStore(Path(self._temporary.name) / "memory.db")
+        self.sessions = SessionStore(Path(self._temporary.name) / "sessions.db")
         self._original = app.dependency_overrides.get(get_current_user)
         app.dependency_overrides[get_current_user] = lambda: {"id": "u1", "role": "member"}
         self.client = TestClient(app)
@@ -30,7 +32,10 @@ class MemoryApiCase(unittest.TestCase):
             app.dependency_overrides[get_current_user] = self._original
 
     def _request(self, method, path, **kwargs):
-        with patch("src.memory.service.get_memory_store", return_value=self.store):
+        with (
+            patch("src.memory.service.get_memory_store", return_value=self.store),
+            patch("src.memory_api.SessionStore", return_value=self.sessions),
+        ):
             return self.client.request(method, path, **kwargs)
 
     def test_unauthenticated_401(self):
@@ -72,6 +77,7 @@ class MemoryApiCase(unittest.TestCase):
         body = response.json()
         self.assertEqual(body["mode"], "list")
         self.assertEqual(body["total"], 1)
+        self.assertEqual(body["items"][0]["source_ref"], "api:manual")
         self.assertNotIn("owner_id", body["items"][0])
 
     def test_search_offset_rejected(self):
@@ -103,6 +109,58 @@ class MemoryApiCase(unittest.TestCase):
         item_id = self._request("POST", "/api/memory/items", json={"text": "x"}).json()["id"]
         app.dependency_overrides[get_current_user] = lambda: {"id": "u2", "role": "member"}
         self.assertEqual(self._request("DELETE", f"/api/memory/items/{item_id}").status_code, 404)
+
+    def test_category_filter_and_context_usage(self):
+        self._request("POST", "/api/memory/items", json={
+            "text": "以后用中文回答", "kind": "constraint", "layer": "identity",
+        })
+        self._request("POST", "/api/memory/items", json={"text": "项目使用 SQLite"})
+        self._request("POST", "/api/memory/items", json={
+            "text": "上次任务已完成", "kind": "episode", "layer": "project",
+        })
+        stable = self._request("GET", "/api/memory/items?category=stable").json()
+        self.assertEqual(stable["total"], 1)
+        self.assertEqual(stable["items"][0]["context_usage"], "always")
+        project = self._request("GET", "/api/memory/items?category=project").json()
+        self.assertEqual(project["total"], 1)
+        self.assertEqual(project["items"][0]["context_usage"], "related")
+        episode = self._request("GET", "/api/memory/items?category=episode").json()
+        self.assertEqual(episode["total"], 1)
+        self.assertEqual(episode["items"][0]["context_usage"], "manual")
+        search = self._request("GET", "/api/memory/items?query=回答&category=stable").json()
+        self.assertEqual(search["count"], 1)
+        self.assertIn("中文", search["items"][0]["text"])
+
+    def test_patch_without_key_creates_version_and_history(self):
+        old = self._request("POST", "/api/memory/items", json={"text": "旧偏好"}).json()
+        response = self._request("PATCH", f"/api/memory/items/{old['id']}", json={"text": "新偏好"})
+        self.assertEqual(response.status_code, 200)
+        new = response.json()
+        self.assertEqual(new["supersedes_id"], old["id"])
+        self.assertEqual(new["text"], "新偏好")
+        self.assertTrue(new["key"])
+        history = self._request("GET", f"/api/memory/items/{new['id']}/history").json()
+        self.assertEqual([row["text"] for row in history["items"]], ["旧偏好", "新偏好"])
+        listing = self._request("GET", "/api/memory/items").json()
+        self.assertEqual(listing["total"], 1)
+        self.assertEqual(listing["items"][0]["id"], new["id"])
+
+    def test_patch_cross_owner_404(self):
+        item_id = self._request("POST", "/api/memory/items", json={"text": "x"}).json()["id"]
+        app.dependency_overrides[get_current_user] = lambda: {"id": "u2", "role": "member"}
+        response = self._request("PATCH", f"/api/memory/items/{item_id}", json={"text": "越权"})
+        self.assertEqual(response.status_code, 404)
+
+    def test_source_session_is_resolved_for_captured_memory(self):
+        session = self.sessions.create("web", owner_id="u1")
+        self.sessions.add_message(session["id"], "user", "以后用中文回答", message_id="req-source")
+        self.store.remember(
+            "u1", text="以后用中文回答", kind="constraint", layer="identity",
+            trust="user_confirmed", source_ref="chat:req-source",
+        )
+        response = self._request("GET", "/api/memory/items?category=stable")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["items"][0]["source_session_id"], session["id"])
 
 
 if __name__ == "__main__":

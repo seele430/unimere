@@ -12,7 +12,7 @@
 | 4 | 取消后进程树退出 | `tests/integration/test_platform_exec_cancel.py`、`tests/integration/test_tier1_runner.py` | Job Object |
 | 5 | 队列上限 / 429 / 终态可读 | `tests/integration/test_platform_queue.py` | 防资源耗尽 |
 | 6 | 节点租约失效停止接活 | `tests/integration/test_platform_scheduling.py::test_expired_lease_stops_accepting` | 不派给死节点 |
-| 7 | TTL/销毁后无残留 | `scripts/verify_w34_residue.py`（手动/阶段） | 进程/目录/DB |
+| 7 | TTL/销毁后无残留 | `scripts/verification/verify_w34_residue.py`（手动/阶段） | 进程/目录/DB |
 | 8 | owner 登录与首启建号 | `tests/test_auth_store.py`、`tests/integration/test_auth_bootstrap.py` | 单用户认证 |
 | 9 | 注册/邀请入口关闭 | `tests/integration/test_single_user_surface.py` | 防路由被加回 |
 | 10 | 备份逐文件可校验、可恢复启动 | `tests/integration/test_backup_restore.py` | 文件哈希 + 全应用启动 |

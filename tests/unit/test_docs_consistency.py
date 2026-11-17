@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 
 def run():
-    import scripts.check_docs_consistency as checker
+    import scripts.verification.check_docs_consistency as checker
 
     buffer = io.StringIO()
 
@@ -26,7 +26,7 @@ class DocsCase(unittest.TestCase):
         self.assertIn("PASS", output)
 
     def test_spec_count_drift_detected(self):
-        import scripts.check_docs_consistency as checker
+        import scripts.verification.check_docs_consistency as checker
 
         with patch.object(checker, "spec_tests", return_value=1):
             code, output = run()
@@ -35,7 +35,7 @@ class DocsCase(unittest.TestCase):
         self.assertIn("Playwright", output)
 
     def test_gpu_constant_drift_detected(self):
-        import scripts.check_docs_consistency as checker
+        import scripts.verification.check_docs_consistency as checker
         from src.tools import comfy_tools
 
         with patch.object(comfy_tools, "MAX_STEPS", 99):

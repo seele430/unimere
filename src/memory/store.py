@@ -300,6 +300,91 @@ class MemoryStore:
 
         return self.get_item(item_id)
 
+    def replace_text(
+        self,
+        owner_id: str,
+        item_id: int,
+        text: str,
+        *,
+        source_ref: str = "api:manual",
+    ) -> MemoryItem:
+        """为当前条目写新版本；无 key 的旧数据也能编辑且保留历史链。"""
+
+        owner_id = validate_owner(owner_id)
+        text = validate_text(text)
+        source_ref = validate_short(source_ref, field="source_ref", limit=MAX_REF_CHARS)
+        now = utc_now()
+
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+
+            try:
+                row = connection.execute(
+                    "SELECT * FROM memory_items WHERE id=? AND owner_id=? "
+                    "AND deleted_at IS NULL",
+                    (item_id, owner_id),
+                ).fetchone()
+                if row is None:
+                    raise MemoryError("memory_not_found")
+
+                old = _to_item(row)
+                if not old.is_effective(now):
+                    raise MemoryError("只能编辑当前生效的记忆")
+
+                group = old.conflict_group
+                if group:
+                    members = [
+                        _to_item(member)
+                        for member in connection.execute(
+                            "SELECT * FROM memory_items WHERE owner_id=? AND conflict_group=? "
+                            "AND deleted_at IS NULL",
+                            (owner_id, group),
+                        ).fetchall()
+                    ]
+                    current = resolve_current(members, at=now).item
+                    if current is None or current.id != old.id:
+                        raise MemoryError("只能编辑当前版本，请从最新记忆进入")
+                else:
+                    group = "key-v1:" + old.kind + ":" + hashlib.sha256(
+                        f"manual:{old.id}".encode("utf-8")
+                    ).hexdigest()[:16]
+
+                key = old.key or f"manual:{old.id}"
+                connection.execute(
+                    "UPDATE memory_items SET key=?, conflict_group=?, updated_at=? WHERE id=?",
+                    (key, group, now, old.id),
+                )
+                self._record_event(
+                    connection, old.id, "group_bind", actor=owner_id, reason="manual-edit"
+                )
+
+                cursor = connection.execute(
+                    "INSERT INTO memory_items ("
+                    " owner_id, kind, layer, trust, key, value, text,"
+                    " source_ref, source_doc_id, valid_from, valid_to,"
+                    " supersedes_id, conflict_group, created_at, updated_at"
+                    ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        owner_id, old.kind, old.layer, "user_confirmed", key, old.value,
+                        text, source_ref, old.source_doc_id, now, None,
+                        old.id, group, now, now,
+                    ),
+                )
+                new_id = int(cursor.lastrowid)
+                connection.execute(
+                    "INSERT INTO memory_items_fts (rowid, text) VALUES (?, ?)",
+                    (new_id, text),
+                )
+                self._record_event(
+                    connection, new_id, "add", actor=owner_id, reason="manual-edit"
+                )
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+
+        return self.get_item(new_id)
+
     def delete_group(self, owner_id: str, group: str) -> int:
         """单事务软删整组；任一失败整体回滚。"""
 

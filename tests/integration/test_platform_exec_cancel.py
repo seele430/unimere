@@ -4,7 +4,7 @@
 探针在 runner 子进程里派生「父 + 子」，用例确认两个 PID 都被清掉，并检查
 trajectory 里取消请求与最终 cancelled 的顺序。
 
-真实 HTTP / SSE 断流的验收在 ``scripts/verify_d11_cancel.py``。
+真实 HTTP / SSE 断流的验收在 ``scripts/verification/verify_d11_cancel.py``。
 """
 
 from __future__ import annotations

@@ -39,7 +39,7 @@ $env:PYTHONIOENCODING = "utf-8"
 ## 4. 演示 A：助手全链路（一句话 → 3 个工具 → 轨迹）
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\verify_g2_chain.py
+.\.venv\Scripts\python.exe scripts\verification\verify_g2_chain.py
 ```
 
 **看什么**
@@ -56,7 +56,7 @@ $env:PYTHONIOENCODING = "utf-8"
 ## 5. 演示 B：全链路取消
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\verify_d11_cancel.py
+.\.venv\Scripts\python.exe scripts\verification\verify_d11_cancel.py
 ```
 
 **看什么**：取消请求先写 `exec_cancel_requested`，进程树清理完成后才写 `exec_finished/cancelled`；
@@ -65,7 +65,7 @@ $env:PYTHONIOENCODING = "utf-8"
 ## 6. 演示 C：平台 HTTP 面 + SDK
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\verify_platform_v1.py
+.\.venv\Scripts\python.exe scripts\verification\verify_platform_v1.py
 ```
 
 **看什么**：真实端口上的 create → exec → cancel → destroy，SDK 全程走 HTTP；
@@ -74,7 +74,7 @@ $env:PYTHONIOENCODING = "utf-8"
 ## 7. 演示 D：重启对账
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\verify_d22_reconcile.py
+.\.venv\Scripts\python.exe scripts\verification\verify_d22_reconcile.py
 ```
 
 **看什么**：起服务 → 建沙箱 → 杀掉 → 人为造「删了工作区 + 插一条 running exec + 放个孤儿目录」
@@ -104,7 +104,7 @@ $env:PERSONAL_AGENT_PLATFORM_TOKEN = "demo-token"
 ## 9. 演示 F：背压（队列）
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\verify_d30_queue.py
+.\.venv\Scripts\python.exe scripts\verification\verify_d30_queue.py
 ```
 
 **看什么**（脚本自己起真实服务、自己设限）：

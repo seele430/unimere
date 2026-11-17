@@ -22,6 +22,7 @@ from src import api
 from src.auth_api import get_auth_store
 from src.core.auth_store import AuthStore
 from src.main import app
+from src.sessions import SessionStore
 
 
 class TestSecureChatHttp(unittest.TestCase):
@@ -95,14 +96,19 @@ class TestSecureChatHttp(unittest.TestCase):
         token,
         request_id,
         message="测试消息",
+        *,
+        session_id=None,
     ):
+        payload = {
+            "request_id": request_id,
+            "message": message,
+        }
+        if session_id is not None:
+            payload["session_id"] = session_id
         return self.client.post(
             "/chat",
             headers=self.auth(token),
-            json={
-                "request_id": request_id,
-                "message": message,
-            },
+            json=payload,
         )
 
     def get_status(self, token, request_id):
@@ -190,7 +196,9 @@ class TestSecureChatHttp(unittest.TestCase):
             second.json(),
         )
 
-        model.assert_called_once_with("测试消息")
+        session_id = first.json()["session_id"]
+        self.assertTrue(session_id)
+        model.assert_called_once_with("测试消息", session_id=session_id)
 
         result = self.get_status(
             self.owner_token,
@@ -490,7 +498,7 @@ class TestSecureChatHttp(unittest.TestCase):
         started = Event()
         release = Event()
 
-        def slow_model(_message):
+        def slow_model(_message, *, session_id=None):
             started.set()
 
             if not release.wait(timeout=8):
@@ -535,6 +543,7 @@ class TestSecureChatHttp(unittest.TestCase):
                         duplicate.json()["status"],
                         "processing",
                     )
+                    self.assertTrue(duplicate.json()["session_id"])
 
                 finally:
                     release.set()
@@ -553,7 +562,7 @@ class TestSecureChatHttp(unittest.TestCase):
     def test_streaming_chat_emits_sse_and_saves_completed_reply(self):
         request_id = self.request_id()
 
-        def stream_model(message, *, emit, cancel_token, bot=None):
+        def stream_model(message, *, emit, cancel_token, bot=None, session_id=None):
             emit({"type": "run_started", "run_id": "run-test"})
             emit({"type": "text_delta", "run_id": "run-test", "text": "流式"})
             emit({"type": "done", "run_id": "run-test", "reply": "流式回复"})
@@ -570,7 +579,51 @@ class TestSecureChatHttp(unittest.TestCase):
         self.assertTrue(response.headers["content-type"].startswith("text/event-stream"))
         self.assertIn("event: text_delta", response.text)
         self.assertIn('"text": "流式"', response.text)
-        self.assertEqual(self.get_status(self.owner_token, request_id).json()["status"], "completed")
+        status = self.get_status(self.owner_token, request_id).json()
+        self.assertEqual(status["status"], "completed")
+        saved = SessionStore().messages(status["session_id"])
+        self.assertEqual(
+            [(item["role"], item["content"]) for item in saved],
+            [("user", "测试"), ("assistant", "流式回复")],
+        )
+
+    def test_messages_continue_same_session_and_new_chat_is_isolated(self):
+        with patch.object(
+            api, "chat", side_effect=["回复一", "回复二", "回复三"]
+        ) as model:
+            first = self.post_chat(
+                self.owner_token, self.request_id(), "项目叫 Atlas"
+            )
+            session_id = first.json()["session_id"]
+            continued = self.post_chat(
+                self.owner_token,
+                self.request_id(),
+                "继续这个话题",
+                session_id=session_id,
+            )
+            fresh = self.post_chat(
+                self.owner_token, self.request_id(), "全新对话"
+            )
+
+        self.assertEqual(continued.status_code, 200)
+        self.assertEqual(continued.json()["session_id"], session_id)
+        self.assertEqual(fresh.status_code, 200)
+        self.assertNotEqual(fresh.json()["session_id"], session_id)
+        self.assertEqual(
+            model.call_args_list[1].kwargs["session_id"], session_id
+        )
+
+        store = SessionStore()
+        old_messages = store.messages(session_id)
+        new_messages = store.messages(fresh.json()["session_id"])
+        self.assertEqual(
+            [item["content"] for item in old_messages],
+            ["项目叫 Atlas", "回复一", "继续这个话题", "回复二"],
+        )
+        self.assertEqual(
+            [item["content"] for item in new_messages],
+            ["全新对话", "回复三"],
+        )
 
     def test_cancel_endpoint_reaches_owner_active_run(self):
         from src.core.run_control import active_runs

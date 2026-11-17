@@ -194,6 +194,43 @@ class MultiToolChainTest(unittest.TestCase):
             len({event["step_id"] for event in exec_events}), 3
         )
 
+    def test_three_tools_can_arrive_in_separate_model_rounds(self):
+        final = iter([chunk(text="分批执行也完成了", finish="stop")])
+        with (
+            patch.object(agent, "MAX_TOOL_CALLS_PER_TURN", 3),
+            patch.object(agent, "init_db"),
+            patch.object(agent, "_knowledge_context", return_value=None),
+            patch.object(
+                agent.client.chat.completions,
+                "create",
+                side_effect=[
+                    self.tool_stream([("c1", "list_dir", "{}")]),
+                    self.tool_stream([("c2", "g2_echo", "{}")]),
+                    self.tool_stream([("c3", "list_dir", '{"path": "."}')]),
+                    final,
+                ],
+            ) as completion,
+        ):
+            reply = run_chat_stream(
+                "分批把这些都跑一遍",
+                emit=self.events.append,
+                cancel_token=self.token,
+            )
+
+        self.assertEqual(reply, "分批执行也完成了")
+        self.assertEqual(len(self.exec_rows()), 3)
+        self.assertEqual(
+            [call.kwargs["tool_choice"] for call in completion.call_args_list],
+            ["auto", "auto", "auto", "auto"],
+        )
+        self.assertEqual(
+            [
+                event["tool"] for event in self.events
+                if event.get("type") == "tool_finished"
+            ],
+            ["list_dir", "g2_echo", "list_dir"],
+        )
+
     def test_reminder_cap_is_independent_of_turn_limit(self):
         with patch.object(agent, "MAX_TOOL_CALLS_PER_TURN", 3):
             with self.assertRaises(RuntimeError):

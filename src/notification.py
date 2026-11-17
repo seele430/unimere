@@ -5,7 +5,8 @@ import requests
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-load_dotenv(BASE_DIR / ".env")
+load_dotenv(Path(os.getenv("PERSONAL_AGENT_DATA_DIR", BASE_DIR / "data")) / ".env")
+load_dotenv(BASE_DIR / ".env")  # 兼容旧版根目录配置，不覆盖已有环境变量。
 
 
 def send_notification(message: str) -> bool:

@@ -38,7 +38,7 @@ while (-not (Test-Path '$goFile') -and (Get-Date) -lt `$deadline) {
     Start-Sleep -Milliseconds 200
 }
 `$env:PYTHONIOENCODING = 'utf-8'
-& '$python' 'scripts\demo_g3.py'
+& '$python' 'scripts\demos\demo_g3.py'
 Start-Sleep -Seconds 5
 "@
 

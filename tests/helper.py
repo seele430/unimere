@@ -108,6 +108,10 @@ def _enter(stack: ExitStack, container) -> config.Paths:
         patch.dict(
             "os.environ",
             {
+                # 会话库直接读取此环境变量，也必须留在测试临时目录。
+                "PERSONAL_AGENT_DATA_DIR": str(
+                    Path(getattr(container, "name", container))
+                ),
                 "PERSONAL_AGENT_PLATFORM_RATE_PER_MIN": "0",
                 # W3：测试不启动趋势采样线程，样本由用例自己喂，避免时序不确定。
                 "PERSONAL_AGENT_TRENDS": "0",

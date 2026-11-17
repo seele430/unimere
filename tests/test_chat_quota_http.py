@@ -338,7 +338,7 @@ class TestChatQuotaHTTP(unittest.TestCase):
             release = Event()
             started = Event()
 
-            def blocking_chat(_message):
+            def blocking_chat(_message, *, session_id=None):
                 started.set()
 
                 if not release.wait(timeout=8):

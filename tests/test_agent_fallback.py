@@ -1,5 +1,6 @@
 """聊天模型 fallback 测试（全 mock，不联网）。"""
 
+import json
 import unittest
 
 from types import SimpleNamespace
@@ -398,6 +399,75 @@ class FallbackCase(unittest.TestCase):
         self.assertEqual(call["tools"], tools)
         self.assertEqual(call["max_tokens"], agent.MAX_OUTPUT_TOKENS)
         self.assertEqual(messages, [{"role": "user", "content": "hi"}])
+
+    def test_recovers_actual_dsml_tool_call_from_content(self):
+        text = (
+            "下载成功，下面进行汇总。\n\n<｜｜DSML｜｜ calls>\n"
+            "<｜｜DSML｜｜ invoke name=\"csv_summarize\">\n"
+            "<｜｜DSML｜｜ parameter name=\"artifact_id\" string=\"true\">"
+            "$http_download.artifact_id"
+            "</｜｜DSML｜｜ parameter>\n"
+            "</｜｜DSML｜｜ invoke>\n</｜｜DSML｜｜ calls>"
+        )
+
+        output, _ = self.run_completion([response(text)])
+        message = output.choices[0].message
+
+        self.assertEqual(message.content, "下载成功，下面进行汇总。")
+        self.assertEqual(len(message.tool_calls), 1)
+        call = message.tool_calls[0]
+        self.assertEqual(call.function.name, "csv_summarize")
+        self.assertEqual(
+            json.loads(call.function.arguments),
+            {"artifact_id": "$http_download.artifact_id"},
+        )
+
+    def test_recovers_split_stream_dsml_and_typed_parameters(self):
+        text = (
+            "<｜｜DSML｜｜ calls><｜｜DSML｜｜ invoke name=\"browser_preview\">"
+            "<｜｜DSML｜｜ parameter name=\"artifact_id\" string=\"true\">"
+            "art_a&amp;b</｜｜DSML｜｜ parameter>"
+            "<｜｜DSML｜｜ parameter name=\"full_page\">true"
+            "</｜｜DSML｜｜ parameter>"
+            "<｜｜DSML｜｜ parameter name=\"width\">1280"
+            "</｜｜DSML｜｜ parameter>"
+            "</｜｜DSML｜｜ invoke></｜｜DSML｜｜ calls>"
+        )
+        stream = TextStream("")
+        stream.chunks = [
+            SimpleNamespace(
+                usage=None,
+                choices=[SimpleNamespace(
+                    delta=SimpleNamespace(
+                        content=text[index:index + 7], tool_calls=None,
+                    ),
+                    finish_reason=None,
+                )],
+            )
+            for index in range(0, len(text), 7)
+        ]
+
+        output, _ = self.run_completion(
+            [stream], stream=True, callback=lambda part: None,
+        )
+        message = output.choices[0].message
+
+        self.assertEqual(message.content, "")
+        self.assertEqual(
+            json.loads(message.tool_calls[0].function.arguments),
+            {"artifact_id": "art_a&b", "full_page": True, "width": 1280},
+        )
+
+    def test_malformed_complete_dsml_block_is_not_executed(self):
+        text = (
+            "<｜｜DSML｜｜ calls><｜｜DSML｜｜ invoke name=\"run_shell\">"
+            "<｜｜DSML｜｜ parameter name=\"command\" string=\"true\">dir"
+            "</｜｜DSML｜｜ parameter>未解析内容"
+            "</｜｜DSML｜｜ invoke></｜｜DSML｜｜ calls>"
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "DSML 工具参数结构无效"):
+            self.run_completion([response(text)])
 
 
 if __name__ == "__main__":

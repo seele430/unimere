@@ -429,12 +429,19 @@ HTTP_GET_TOOL = {
 TOOL_DEFINITIONS = (
     (READ_FILE_TOOL, "allow", read_file),
     (LIST_DIR_TOOL, "allow", list_dir),
-    # 以下四个在 D13 接入审批门之前默认 ask：模型即使猜到名字也不会被执行。
+    # 有副作用或联网的工具必须经过 D13 单次审批，不能仅靠模型自律。
     (WRITE_FILE_TOOL, "ask", write_file),
     (RUN_SHELL_TOOL, "ask", run_shell),
     (RUN_PYTHON_TOOL, "ask", run_python),
     (HTTP_GET_TOOL, "ask", http_get),
 )
 
-# 直接暴露给模型的安全子集。
-MODEL_VISIBLE_TOOLS = (READ_FILE_TOOL, LIST_DIR_TOOL)
+# 读操作直接允许；写入、执行和联网工具对模型可见，但每次都要审批。
+MODEL_VISIBLE_TOOLS = (
+    READ_FILE_TOOL,
+    LIST_DIR_TOOL,
+    WRITE_FILE_TOOL,
+    RUN_SHELL_TOOL,
+    RUN_PYTHON_TOOL,
+    HTTP_GET_TOOL,
+)

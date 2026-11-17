@@ -39,6 +39,7 @@ from src.core import approvals as approval_core
 from src.core.bot_store import BotStore
 from src.core.run_control import ChatCancelled, active_runs
 from src.core.run_store import RunStore
+from src.sessions import SessionStore
 
 from src.core.ai_budget import (
     BudgetExceeded,
@@ -113,6 +114,41 @@ def _read(
             request_id,
             user_id,
         )
+
+
+def _owned_web_session(session_id: str, user_id: str) -> dict:
+    session = SessionStore().get_owned(session_id, user_id)
+    if session is None or session["deleted"] or session["source"] != "web":
+        raise HTTPException(status_code=404, detail="会话不存在或无权访问")
+    return session
+
+
+def _save_session_message(
+    session_id: str, role: str, content: str, request_id: str
+) -> None:
+    """消息记录失败只记录日志，不改变已经产生的模型结果。"""
+
+    try:
+        SessionStore().add_message(
+            session_id, role, content, message_id=request_id
+        )
+    except Exception:
+        legacy_chat.logger.exception(
+            "Failed saving session message request_id=%s role=%s",
+            request_id,
+            role,
+        )
+
+
+def _request_session_id(request_id: str, user_id: str) -> str | None:
+    """重试或断线恢复时找回原会话，不读取其他用户的聊天记录。"""
+    try:
+        return SessionStore().web_session_for_message(request_id, user_id)
+    except Exception:
+        legacy_chat.logger.exception(
+            "Failed recovering session request_id=%s", request_id
+        )
+        return None
 
 
 # ==========================================
@@ -307,6 +343,7 @@ def get_chat_request(
 
     return {
         "request_id": request_id,
+        "session_id": _request_session_id(request_id, user["id"]),
         "status": record["status"],
         "reply": (
             record["reply"]
@@ -437,6 +474,7 @@ async def _stream_chat_events(
     user_id: str,
     role: str,
     bot: dict | None,
+    session_id: str,
     cancel_token,
 ):
     """Bridge the synchronous assistant worker to SSE without losing cancellation."""
@@ -455,13 +493,15 @@ async def _stream_chat_events(
             ):
                 with agent.track_chat_usage(user_id, request_id) as usage_scope:
                     reply = run_chat_stream(
-                        message, emit=emit, cancel_token=cancel_token, bot=bot
+                        message, emit=emit, cancel_token=cancel_token, bot=bot,
+                        session_id=session_id,
                     )
             if not isinstance(reply, str) or not reply.strip():
                 raise ValueError("模型没有返回有效文本")
             saved = _update(request_id, user_id, "completed", reply)
             if not saved:
                 raise RuntimeError("请求状态发生变化")
+            _save_session_message(session_id, "assistant", reply, request_id)
             _reconcile_completed_budget(
                 request_id, user_id, usage_scope.completed_calls
             )
@@ -498,6 +538,7 @@ async def _stream_chat_events(
             if event is None:
                 break
             event.setdefault("request_id", request_id)
+            event.setdefault("session_id", session_id)
             yield (
                 f"event: {event['type']}\n"
                 f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
@@ -547,6 +588,10 @@ def chat_endpoint(
     # 不能从浏览器提交的消息里提取。
     user_id = user["id"]
     role = user["role"]
+    session = (
+        _owned_web_session(request.session_id, user_id)
+        if request.session_id else None
+    )
 
     # 可选：单人聊天选中的 Bot（S3）。校验失败不消耗预算。
     bot = None
@@ -638,10 +683,12 @@ def chat_endpoint(
     # ======================================
 
     if not admission["admitted"]:
+        replay_session_id = _request_session_id(request_id, user_id)
 
         if admission["status"] == "completed":
             return {
                 "request_id": request_id,
+                "session_id": replay_session_id,
                 "status": "completed",
                 "reply": admission["reply"],
             }
@@ -652,6 +699,7 @@ def chat_endpoint(
                 headers=NO_STORE,
                 content={
                     "request_id": request_id,
+                    "session_id": replay_session_id,
                     "status": "processing",
                     "detail": "请求仍在处理中",
                 },
@@ -671,8 +719,13 @@ def chat_endpoint(
         )
 
     # ======================================
-    # 新请求：执行模型
+    # 新请求：绑定独立会话并保存用户消息
     # ======================================
+
+    if session is None:
+        session = SessionStore().create("web", owner_id=user_id)
+    session_id = session["id"]
+    _save_session_message(session_id, "user", message, request_id)
 
     if request.stream:
         cancel_token = active_runs.start(user_id, request_id)
@@ -684,6 +737,7 @@ def chat_endpoint(
                 user_id=user_id,
                 role=role,
                 bot=bot,
+                session_id=session_id,
                 cancel_token=cancel_token,
             ),
             media_type="text/event-stream",
@@ -720,9 +774,11 @@ def chat_endpoint(
             ) as usage_scope:
 
                 if bot is None:
-                    reply = legacy_chat.chat(message)
+                    reply = legacy_chat.chat(message, session_id=session_id)
                 else:
-                    reply = legacy_chat.chat(message, bot=bot)
+                    reply = legacy_chat.chat(
+                        message, bot=bot, session_id=session_id
+                    )
 
         if (
             not isinstance(reply, str)
@@ -830,6 +886,8 @@ def chat_endpoint(
             },
         )
 
+    _save_session_message(session_id, "assistant", reply, request_id)
+
     # 聊天回复保存成功后，
     # 才核对所有已收到模型响应的用量。
     _reconcile_completed_budget(
@@ -840,6 +898,7 @@ def chat_endpoint(
 
     return {
         "request_id": request_id,
+        "session_id": session_id,
         "status": "completed",
         "reply": reply,
     }

@@ -132,6 +132,9 @@ class ChatRequest(BaseModel):
 
     request_id: str | None = None
 
+    # 可选：继续某个服务端会话；为空时创建不含旧消息的新会话。
+    session_id: str | None = Field(default=None, max_length=64)
+
     # 可选：单人聊天时选中的 Bot（S3）。
     bot_id: int | None = None
 

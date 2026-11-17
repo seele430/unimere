@@ -2,6 +2,7 @@
 """Personal Agent 登录认证接口，含持久化登录限流。"""
 
 import hashlib
+import logging
 import sqlite3
 import time
 
@@ -31,9 +32,11 @@ from src.core.auth_store import (
 )
 
 from src.config import paths
+from src.memory import service as memory_service
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+logger = logging.getLogger(__name__)
 
 LOGIN_WINDOW_SECONDS = 600
 MAX_USER_ATTEMPTS = 8
@@ -424,6 +427,13 @@ def bootstrap(
             status_code=500,
             detail="初始化成功，但登录状态创建失败",
         )
+
+    try:
+        if paths.knowledge_db.is_file():
+            memory_service.adopt_legacy_owner(user["id"])
+    except Exception:
+        # 账号已创建，记忆迁移失败不能导致 bootstrap 返回 500 后无法重试。
+        logger.exception("首次建站承接旧记忆失败 owner_id=%s", user.get("id"))
 
     return {
         "token": token,

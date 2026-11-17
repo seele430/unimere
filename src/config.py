@@ -55,12 +55,12 @@ class Paths:
 def build_paths(data_dir: str | Path | None = None) -> Paths:
     """按数据目录构造路径集合。
 
-    优先级：显式参数 > PERSONAL_AGENT_DATA_DIR 环境变量 > 项目根目录。
+    优先级：显式参数 > PERSONAL_AGENT_DATA_DIR 环境变量 > 项目 data 目录。
     """
 
     if data_dir is None:
         override = os.getenv(DATA_DIR_ENV, "").strip()
-        root = Path(override).expanduser() if override else BASE_DIR
+        root = Path(override).expanduser() if override else BASE_DIR / "data"
     else:
         root = Path(data_dir).expanduser()
 

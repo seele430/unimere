@@ -14,7 +14,7 @@
 | 风险分级与确定性审批闸门 | `src/routing/policy.py` |
 | 降级不降权限 | `src/routing/fallback.py` |
 | `route_decided` 落轨迹 | `src/routing/events.py` |
-| 一句话 → 沙箱 → 图表 | `scripts/demo_route_pipeline.py` |
+| 一句话 → 沙箱 → 图表 | `scripts/demos/demo_route_pipeline.py` |
 | 评估集与评估脚本 | `scripts/build_router_eval.py`、`scripts/eval_router.py` |
 
 **职责边界**：Router 只输出 intent / 置信度 / 风险 / 能力 / 执行约束 / 回退；不选节点、不查配额、不建沙箱。
@@ -67,6 +67,6 @@
 ```powershell
 .\.venv\Scripts\python.exe scripts\build_router_eval.py     # 重建评估集（会改哈希，需同步 manifest）
 .\.venv\Scripts\python.exe scripts\eval_router.py --split test
-.\.venv\Scripts\python.exe scripts\demo_route_pipeline.py
+.\.venv\Scripts\python.exe scripts\demos\demo_route_pipeline.py
 .\.venv\Scripts\python.exe -m unittest tests.test_intent_router tests.test_router_eval tests.test_routing_policy tests.test_routing_fallback
 ```

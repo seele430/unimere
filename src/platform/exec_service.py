@@ -127,6 +127,8 @@ ENV_ALLOWLIST = (
     "TMP",
     "LANG",
     "LC_ALL",
+    # Playwright 的非秘密安装位置；PYTHONPATH 与凭据仍不下传。
+    "PLAYWRIGHT_BROWSERS_PATH",
 )
 
 TIER1_ENV = "PERSONAL_AGENT_TIER1"
@@ -267,6 +269,18 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _decode_output(payload: bytes) -> str:
+    """优先 UTF-8；Windows 本地命令的 ANSI 输出回退到系统代码页。"""
+
+    try:
+        return payload.decode("utf-8")
+    except UnicodeDecodeError:
+        if os.name == "nt":
+            return payload.decode("mbcs", "replace")
+
+        return payload.decode("utf-8", "replace")
+
+
 class _OutputCollector:
     """stdout 与 stderr 合计一个字节预算。"""
 
@@ -299,7 +313,7 @@ class _OutputCollector:
 
     def text(self, source: str) -> str:
         with self._lock:
-            return b"".join(self._chunks[source]).decode("utf-8", "replace")
+            return _decode_output(b"".join(self._chunks[source]))
 
 
 class Tier1Executor:

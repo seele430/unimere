@@ -687,6 +687,24 @@ def console_cordon_node(
     return _node_view_for_console(row)
 
 
+@router.post("/actions/nodes/{node_id}/uncordon", status_code=202)
+def console_uncordon_node(
+    node_id: str,
+    user: dict = Depends(require_owner),
+):
+    try:
+        row = platform_ops.uncordon_node(node_id, renew_default=True)
+    except PlatformError as exc:
+        _console_audit(
+            "node.uncordon", user=user, outcome="denied", code=exc.code, detail={"node_id": node_id}
+        )
+        return _op_error(exc)
+
+    _console_audit("node.uncordon", user=user, detail={"node_id": node_id})
+
+    return _node_view_for_console(row)
+
+
 @router.post("/actions/nodes/{node_id}/drain", status_code=202)
 def console_drain_node(
     node_id: str,

@@ -2,7 +2,7 @@
 
 边界：
 
-- 只做本地 SQLite；不做多用户/权限；
+- 只做本地 SQLite；网页会话按登录用户隔离，QQ 沿用发送者维度；
 - 软删（deleted_at）不物理删除；
 - QQ 每次上线由 lifecycle 事件建新会话；`active` 指针记录「当前 QQ 会话」；
 - 消息写入靠 `(session_id, message_id, role)` 唯一约束防重复。
@@ -26,6 +26,7 @@ DEFAULT_CONTEXT_CHARS = 4000
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
     id              TEXT PRIMARY KEY,
+    owner_id        TEXT NOT NULL DEFAULT '',
     source          TEXT NOT NULL CHECK (source IN ('web','qq')),
     title           TEXT NOT NULL DEFAULT '',
     title_source    TEXT NOT NULL DEFAULT 'auto',
@@ -75,6 +76,7 @@ def data_root() -> Path:
 def _row_to_session(row: sqlite3.Row) -> dict:
     return {
         "id": row["id"],
+        "owner_id": row["owner_id"],
         "source": row["source"],
         "title": row["title"],
         "title_source": row["title_source"],
@@ -96,6 +98,17 @@ class SessionStore:
 
         with self._session() as connection:
             connection.executescript(SCHEMA)
+            columns = {
+                row["name"] for row in connection.execute("PRAGMA table_info(sessions)")
+            }
+            if "owner_id" not in columns:
+                connection.execute(
+                    "ALTER TABLE sessions ADD COLUMN owner_id TEXT NOT NULL DEFAULT ''"
+                )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_sessions_owner "
+                "ON sessions(owner_id, deleted_at, updated_at)"
+            )
 
     @contextmanager
     def _session(self):
@@ -116,6 +129,7 @@ class SessionStore:
         title: str = "",
         *,
         bot_launch_id: str | None = None,
+        owner_id: str = "",
     ) -> dict:
         if source not in ("web", "qq"):
             raise SessionError("source 只能是 web / qq")
@@ -127,9 +141,9 @@ class SessionStore:
         with self._session() as connection:
             connection.execute(
                 "INSERT INTO sessions "
-                "(id, source, title, title_source, bot_launch_id, created_at, updated_at) "
-                "VALUES (?, ?, ?, 'auto', ?, ?, ?)",
-                (identifier, source, title, bot_launch_id, now, now),
+                "(id, owner_id, source, title, title_source, bot_launch_id, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, 'auto', ?, ?, ?)",
+                (identifier, owner_id, source, title, bot_launch_id, now, now),
             )
 
         return self.get(identifier)  # type: ignore[return-value]
@@ -142,16 +156,97 @@ class SessionStore:
 
         return _row_to_session(row) if row else None
 
-    def list(self, limit: int = 50, *, include_deleted: bool = False) -> list[dict]:
+    def get_owned(self, session_id: str, owner_id: str) -> dict | None:
+        with self._session() as connection:
+            row = connection.execute(
+                "SELECT * FROM sessions WHERE id=? AND owner_id=?",
+                (str(session_id), owner_id),
+            ).fetchone()
+
+        return _row_to_session(row) if row else None
+
+    def web_session_for_message(self, message_id: str, owner_id: str) -> str | None:
+        """按请求 ID 找回会话，供断线恢复和幂等重试继续使用原对话。"""
+        with self._session() as connection:
+            row = connection.execute(
+                "SELECT s.id FROM sessions AS s "
+                "JOIN session_messages AS m ON m.session_id=s.id "
+                "WHERE m.message_id=? AND m.role='user' AND s.owner_id=? "
+                "AND s.source='web' AND s.deleted_at IS NULL "
+                "ORDER BY m.id DESC LIMIT 1",
+                (str(message_id), owner_id),
+            ).fetchone()
+        return str(row["id"]) if row else None
+
+    def list_owned(
+        self, owner_id: str, limit: int = 50, *, include_deleted: bool = False
+    ) -> list[dict]:
         limit = max(1, min(int(limit), 200))
-        where = "" if include_deleted else "WHERE deleted_at IS NULL"
+        deleted = "" if include_deleted else "AND deleted_at IS NULL"
+        with self._session() as connection:
+            rows = connection.execute(
+                "SELECT * FROM sessions WHERE owner_id=? AND source='web' " + deleted +
+                " ORDER BY (pinned_at IS NULL), pinned_at DESC, "
+                "COALESCE(last_message_at, updated_at) DESC LIMIT ?",
+                (owner_id, limit),
+            ).fetchall()
+        return [_row_to_session(row) for row in rows]
+
+    def change_owned(self, session_id: str, owner_id: str, action: str, value=None) -> bool:
+        """所有网页会话写操作都同时限定 id 和 owner，避免跨用户修改。"""
+        now = self._clock()
+        statements = {
+            "rename": (
+                "UPDATE sessions SET title=?, title_source='user', updated_at=? "
+                "WHERE id=? AND owner_id=? AND source='web'",
+                (str(value or "").strip()[:MAX_TITLE_CHARS], now, str(session_id), owner_id),
+            ),
+            "pin": (
+                "UPDATE sessions SET pinned_at=?, updated_at=? WHERE id=? AND owner_id=? "
+                "AND source='web'",
+                (now if value else None, now, str(session_id), owner_id),
+            ),
+            "delete": (
+                "UPDATE sessions SET deleted_at=?, updated_at=? WHERE id=? AND owner_id=? "
+                "AND source='web'",
+                (now, now, str(session_id), owner_id),
+            ),
+        }
+        if action not in statements:
+            raise SessionError("未知会话操作")
+        if action == "rename" and not statements[action][1][0]:
+            raise SessionError("标题不能为空")
+        sql, params = statements[action]
+        with self._session() as connection:
+            cursor = connection.execute(sql, params)
+        return cursor.rowcount == 1
+
+    def list(
+        self,
+        limit: int = 50,
+        *,
+        source: str | None = None,
+        include_deleted: bool = False,
+    ) -> list[dict]:
+        limit = max(1, min(int(limit), 200))
+        conditions = []
+        params: list[object] = []
+        if source is not None:
+            if source not in ("web", "qq"):
+                raise SessionError("source 只能是 web / qq")
+            conditions.append("source=?")
+            params.append(source)
+        if not include_deleted:
+            conditions.append("deleted_at IS NULL")
+        where = "WHERE " + " AND ".join(conditions) if conditions else ""
+        params.append(limit)
 
         with self._session() as connection:
             rows = connection.execute(
                 "SELECT * FROM sessions " + where +
                 " ORDER BY (pinned_at IS NULL), pinned_at DESC, "
                 "COALESCE(last_message_at, updated_at) DESC LIMIT ?",
-                (limit,),
+                params,
             ).fetchall()
 
         return [_row_to_session(row) for row in rows]
@@ -188,17 +283,24 @@ class SessionStore:
 
         return cursor.rowcount == 1
 
-    def find_by_prefix(self, prefix: str) -> list[dict]:
+    def find_by_prefix(self, prefix: str, *, source: str | None = None) -> list[dict]:
         prefix = (prefix or "").strip()
 
         if len(prefix) < 6:
             raise SessionError("前缀至少 6 位")
+        if source is not None and source not in ("web", "qq"):
+            raise SessionError("source 只能是 web / qq")
+
+        source_filter = " AND source=?" if source is not None else ""
+        params: list[object] = [prefix + "%"]
+        if source is not None:
+            params.append(source)
 
         with self._session() as connection:
             rows = connection.execute(
                 "SELECT * FROM sessions WHERE id LIKE ? AND deleted_at IS NULL "
-                "ORDER BY updated_at DESC LIMIT 5",
-                (prefix + "%",),
+                + source_filter + " ORDER BY updated_at DESC LIMIT 5",
+                params,
             ).fetchall()
 
         return [_row_to_session(row) for row in rows]
@@ -244,7 +346,7 @@ class SessionStore:
                 (str(session_id),),
             ).fetchone()
 
-            if row and row["source"] == "qq" and row["title_source"] == "auto" \
+            if row and row["source"] in ("web", "qq") and row["title_source"] == "auto" \
                     and role == "user" and not row["title"]:
                 title = content[:20]
                 connection.execute(

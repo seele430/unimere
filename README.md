@@ -48,7 +48,7 @@
 | **语音** | Edge TTS 神经网络语音，每个 Bot 独立音色 |
 | **提醒** | 定时提醒 + 应用内推送 + 邮件/推送通道 |
 | **任务中心** | 定时任务、执行历史、健康检查 |
-| **QQ 通道** | OneBot 接入：私聊/群消息入站、意图路由、流式回复、会话管理（每次上线新会话）、接力任务继续 |
+| **QQ 官方机器人** | 官方 API v2 + 出站 WS 网关，支持白名单 C2C 单聊、意图路由、接力任务与图文混排，无需公网；接入步骤见 [docs/qq-official.md](docs/qq-official.md) |
 | **额度** | 模型调用计费、预算控制、用量报表 |
 | **监控** | 站点健康检查 + 告警分发 |
 | **产物** | 登记、预览（文本/图片/PDF）、下载、**两版对比** |
@@ -81,7 +81,7 @@
 | 语音 | Edge TTS（微软神经网络语音，免 key）；转写用 faster-whisper（CPU） |
 | 图像 | ComfyUI（本机，SD 1.5，低显存模式） |
 | 前端 | React 19 · TypeScript · Vite 8 |
-| 测试 | unittest（**2180 个后端用例**）+ Playwright（**79 条前端链路**） |
+| 测试 | unittest（**2180 个后端用例**）+ Playwright（**83 条前端链路**） |
 
 ---
 
@@ -133,7 +133,7 @@
 3. 调用前读 `/system_stats`，空闲显存 <2500 MB 直接中文拒绝，**不发请求**；
 4. 单张、不连跑、超时 120 秒。
 
-自检脚本 `scripts/verify_gpu_guard.py` 会检查这四条有没有被改掉（改小常量、删参数都会红）。
+自检脚本 `scripts/verification/verify_gpu_guard.py` 会检查这四条有没有被改掉（改小常量、删参数都会红）。
 详见 `docs/gpu-protection.md`。
 
 ---
@@ -150,7 +150,7 @@ npm install
 cd ..
 
 # 2. 配置（需要 DeepSeek API Key）
-#    在 .env 里写：DEEPSEEK_API_KEY=sk-xxxx
+#    在 data\.env 里写：OPENAI_API_KEY=sk-xxxx
 
 # 3. 一键启动（api:8000 / scheduler / outbox / frontend:5173）
 .\scripts\run-dev.ps1
@@ -183,8 +183,12 @@ Personal Agent/
 │   ├── BotsView.tsx        # Bot 管理
 │   └── PlatformView.tsx    # 平台控制台
 ├── tests/                  # 测试文件清单见 tests/registry.py
-├── scripts/                # 起停、测试、验收、运维脚本
-└── docs/                   # 架构 / 威胁模型 / GPU 保护 / 验收报告 / archive
+├── scripts/                # 起停、测试、备份等常用入口
+│   ├── verification/       # 端到端验收、自检与冒烟脚本
+│   ├── demos/              # 演示与垂直切片
+│   └── experiments/        # 压测、故障注入与基线实验
+├── docs/                   # 使用文档、交接、计划、报告与 archive
+└── data/                   # 本地配置、数据库与日志（不纳入版本控制）
 ```
 
 ---
@@ -204,7 +208,7 @@ Personal Agent/
 设 `PERSONAL_AGENT_ORCH_PLATFORM=1` 时，编排的 coding 步骤改在平台沙箱里执行
 （队列、超时/TTL、输出上限、白名单 env 注入与审计都由平台约束），默认关闭、行为不变。
 
-前端 Playwright 79 条（含平台控制台、产物预览与对比、活动时间线、视频总结、图生图面板）：
+前端 Playwright 83 条（含平台控制台、产物预览与对比、活动时间线、视频总结、图生图面板）：
 
 ```powershell
 cd frontend
@@ -222,14 +226,14 @@ npx playwright test tests/console.spec.ts # 只看平台控制台
 .\.venv\Scripts\python.exe scripts\run_tests.py audit
 
 # 端到端：黄金路径 10 步 + 远程 TLS 8 项 + 协作闭环
-.\.venv\Scripts\python.exe scripts\verify_e2e.py
+.\.venv\Scripts\python.exe scripts\verification\verify_e2e.py
 
 # 混合回归（随机顺序 10 轮，含 GPU 保护断言）
 .\.venv\Scripts\python.exe scripts\run_mixed_regression.py --rounds 10
 
 # GPU 保护自检 / 文档一致性自检
-.\.venv\Scripts\python.exe scripts\verify_gpu_guard.py
-.\.venv\Scripts\python.exe scripts\check_docs_consistency.py
+.\.venv\Scripts\python.exe scripts\verification\verify_gpu_guard.py
+.\.venv\Scripts\python.exe scripts\verification\check_docs_consistency.py
 
 # 视频：摘要（默认 faster-whisper CPU 后端）
 .\.venv\Scripts\python.exe scripts\summarize_video.py <视频> --backend faster --model-dir <模型目录>

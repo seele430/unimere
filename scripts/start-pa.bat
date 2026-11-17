@@ -3,7 +3,8 @@ rem PA backend autostart: api(:8000) + scheduler + outbox, hidden window.
 rem Skips when :8000 is already listening.
 
 setlocal
-set "PA_DIR=C:\Users\123\Personal Agent"
+set "PA_DIR=%~dp0.."
+if not exist "%PA_DIR%\data" mkdir "%PA_DIR%\data"
 set "LOG=%PA_DIR%\data\start-pa.log"
 
 echo %date% %time% start-pa begin>>"%LOG%"

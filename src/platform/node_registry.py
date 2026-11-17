@@ -303,6 +303,34 @@ class NodeRegistry:
 
         return self._mark(node_id, "cordoned_at", "cordoned", now)
 
+    def uncordon(self, node_id: str, *, now: datetime | None = None) -> dict[str, Any]:
+        """取消摘流；保留 drain / removed，也不伪造节点心跳。"""
+
+        with closing(self.connect()) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+
+            try:
+                row = conn.execute(
+                    "SELECT * FROM agent_nodes WHERE node_id = ?", (node_id,)
+                ).fetchone()
+
+                if row is None:
+                    raise NodeNotFound(node_id)
+
+                if row["removed_at"] is not None:
+                    raise InvalidNodeState(f"节点 {node_id} 已移除，不能再 uncordon")
+
+                conn.execute(
+                    "UPDATE agent_nodes SET cordoned_at = NULL WHERE node_id = ?",
+                    (node_id,),
+                )
+                conn.commit()
+            except BaseException:
+                conn.rollback()
+                raise
+
+        return self.get(node_id, now=now)
+
     def drain(self, node_id: str, *, now: datetime | None = None) -> dict[str, Any]:
         """排水：不接新沙箱，等存量沙箱回收后才允许 remove。"""
 

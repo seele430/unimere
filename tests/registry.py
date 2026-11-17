@@ -111,6 +111,56 @@ TEST_SCHEMAS = {
         risk="medium",
     ),
 
+    # P1：执行与联网工具的模型可见性及审批策略
+    "unit/test_sandbox_tool_visibility.py": TestSchema(
+        layer="unit",
+        domain="tool_policy",
+        database="none",
+        authentication="none",
+        external_network="none",
+        risk="high",
+    ),
+
+    # P2：浏览器预览参数、认证身份、产物登记与失败清理（Playwright 替身）
+    "unit/test_browser_tools.py": TestSchema(
+        layer="unit",
+        domain="tool_policy",
+        database="temporary_sqlite",
+        authentication="mocked",
+        external_network="none",
+        risk="high",
+    ),
+
+    # P3：数据集下载完整性、大小边界、认证身份与失败清理（HTTP 替身）
+    "unit/test_download_tools.py": TestSchema(
+        layer="unit",
+        domain="tool_policy",
+        database="temporary_sqlite",
+        authentication="mocked",
+        external_network="mocked",
+        risk="high",
+    ),
+
+    # P4：CSV 归属、列级统计、报告转义与失败清理
+    "unit/test_csv_summary_tools.py": TestSchema(
+        layer="unit",
+        domain="tool_policy",
+        database="temporary_sqlite",
+        authentication="mocked",
+        external_network="none",
+        risk="high",
+    ),
+
+    # 本地技能发现、启停、对话注入与顺序工作流引用
+    "unit/test_skill_system.py": TestSchema(
+        layer="unit",
+        domain="skills",
+        database="none",
+        authentication="none",
+        external_network="none",
+        risk="medium",
+    ),
+
     # L1：Python SDK 与语言中立 v1 fixture（内存传输）
     "unit/test_platform_sdk.py": TestSchema(
         layer="unit",
@@ -426,6 +476,15 @@ TEST_SCHEMAS = {
         risk="medium",
     ),
 
+    "unit/test_memory_engine.py": TestSchema(
+        layer="unit",
+        domain="memory",
+        database="temporary_sqlite",
+        authentication="mocked",
+        external_network="none",
+        risk="medium",
+    ),
+
     "unit/test_memory_tools.py": TestSchema(
         layer="unit",
         domain="memory",
@@ -435,6 +494,24 @@ TEST_SCHEMAS = {
         risk="medium",
     ),
 
+    "unit/test_memory_work.py": TestSchema(
+        layer="unit",
+        domain="memory",
+        database="temporary_sqlite",
+        authentication="none",
+        external_network="none",
+        risk="medium",
+    ),
+
+    "test_agent_stream_work_memory.py": TestSchema(
+        layer="integration",
+        domain="agent_stream",
+        database="temporary_sqlite",
+        authentication="mocked",
+        external_network="mocked",
+        risk="high",
+    ),
+
     "integration/test_memory_api.py": TestSchema(
         layer="integration",
         domain="memory",
@@ -442,15 +519,6 @@ TEST_SCHEMAS = {
         authentication="mocked",
         external_network="none",
         risk="medium",
-    ),
-
-    "unit/test_launch_watcher.py": TestSchema(
-        layer="unit",
-        domain="qq",
-        database="temporary_sqlite",
-        authentication="none",
-        external_network="none",
-        risk="low",
     ),
 
     "unit/test_sessions.py": TestSchema(
@@ -1781,18 +1849,8 @@ TEST_SCHEMAS = {
         risk="low",
     ),
 
-    # L1：QQ 入站（OneBot 签名/白名单/幂等/限流，全 mock）
+    # L1：QQ 入站共享逻辑（白名单/幂等/限流，全 mock）
     "unit/test_qq_inbound.py": TestSchema(
-        layer="unit",
-        domain="qq",
-        database="none",
-        authentication="none",
-        external_network="mocked",
-        risk="medium",
-    ),
-
-    # L1：QQ 入站端点固定 204（防 OneBot 快速回复双通道）
-    "unit/test_qq_api.py": TestSchema(
         layer="unit",
         domain="qq",
         database="none",

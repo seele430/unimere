@@ -126,7 +126,8 @@ def recall_tool(tool_call, cancel_token=None) -> dict:
     }
 
 
-MODEL_VISIBLE_TOOLS = [REMEMBER_TOOL, RECALL_TOOL]
+# 写入由对话前的确定性捕获完成，避免模型再写一次；保留只读召回工具。
+MODEL_VISIBLE_TOOLS = [RECALL_TOOL]
 TOOL_DEFINITIONS = [
     (REMEMBER_TOOL, "ask", remember_tool),
     (RECALL_TOOL, "allow", recall_tool),

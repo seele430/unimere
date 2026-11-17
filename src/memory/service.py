@@ -6,9 +6,40 @@ import sqlite3
 
 from contextlib import closing
 
-from src.memory.models import MemoryError, utc_now
+from src.memory.models import MemoryError, utc_now, validate_owner
 from src.memory.resolve import resolve_current
 from src.memory.store import get_memory_store
+
+
+def adopt_legacy_owner(owner_id: str) -> int:
+    """首次创建站长时承接建站前记忆；不写正文，也不改变版本关系。"""
+
+    owner_id = validate_owner(owner_id)
+    store = get_memory_store()
+    now = utc_now()
+    with closing(sqlite3.connect(store.db_path, timeout=10)) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        try:
+            rows = connection.execute(
+                "SELECT id FROM memory_items WHERE owner_id<>?", (owner_id,)
+            ).fetchall()
+            item_ids = [int(row[0]) for row in rows]
+            if item_ids:
+                placeholders = ",".join("?" for _ in item_ids)
+                connection.execute(
+                    f"UPDATE memory_items SET owner_id=? WHERE id IN ({placeholders})",
+                    [owner_id, *item_ids],
+                )
+                connection.executemany(
+                    "INSERT INTO memory_events (item_id, action, actor, reason, at) "
+                    "VALUES (?, 'owner_adopt', ?, 'first-bootstrap', ?)",
+                    [(item_id, owner_id, now) for item_id in item_ids],
+                )
+            connection.commit()
+            return len(item_ids)
+        except Exception:
+            connection.rollback()
+            raise
 
 
 def remember(
@@ -32,14 +63,29 @@ def remember(
     )
 
 
-def recall(owner_id: str, query: str, *, k: int = 5) -> dict:
+def recall(
+    owner_id: str,
+    query: str,
+    *,
+    k: int = 5,
+    kind: str | None = None,
+    layer: str | None = None,
+    min_trust: str | None = None,
+) -> dict:
     if not isinstance(query, str) or not query.strip():
         raise MemoryError("query 不能为空")
 
     if isinstance(k, bool) or not isinstance(k, int) or not 1 <= k <= 50:
         raise MemoryError("k 必须是 1..50")
 
-    return get_memory_store().search(owner_id, query.strip(), k=k)
+    return get_memory_store().search(
+        owner_id,
+        query.strip(),
+        k=k,
+        kind=kind,
+        layer=layer,
+        min_trust=min_trust,
+    )
 
 
 def get_item(owner_id: str, item_id: int):
@@ -51,6 +97,13 @@ def get_item(owner_id: str, item_id: int):
 
     return item
 
+
+def update_text(owner_id: str, item_id: int, text: str):
+    if get_item(owner_id, item_id) is None:
+        return None
+    return get_memory_store().replace_text(owner_id, item_id, text)
+
+
 class HistoryError(MemoryError):
     def __init__(self, code: str, message: str = ""):
         super().__init__(message or code)
@@ -60,13 +113,27 @@ class HistoryError(MemoryError):
 def _public(item) -> dict:
     return {
         "id": item.id, "key": item.key, "kind": item.kind, "layer": item.layer,
-        "text": item.text, "trust": item.trust,
+        "text": item.text, "trust": item.trust, "source_ref": item.source_ref,
         "valid_from": item.valid_from, "valid_to": item.valid_to,
         "supersedes_id": item.supersedes_id, "created_at": item.created_at,
+        "updated_at": item.updated_at,
     }
 
 
-def list_current(owner_id: str, *, limit: int = 20, offset: int = 0) -> dict:
+CATEGORY_KINDS = {
+    "all": frozenset({"preference", "constraint", "project_fact", "episode"}),
+    "stable": frozenset({"preference", "constraint"}),
+    "project": frozenset({"project_fact"}),
+    "episode": frozenset({"episode"}),
+}
+
+
+def list_current(
+    owner_id: str, *, limit: int = 20, offset: int = 0, category: str = "all"
+) -> dict:
+    if category not in CATEGORY_KINDS:
+        raise MemoryError(f"未知记忆分类：{category}")
+
     store = get_memory_store()
     items = store.list_items(owner_id, include_deleted=True, limit=100000)
     moment = utc_now()
@@ -74,7 +141,7 @@ def list_current(owner_id: str, *, limit: int = 20, offset: int = 0) -> dict:
     current = []
 
     for item in items:
-        if not item.is_effective(moment):
+        if not item.is_effective(moment) or item.kind not in CATEGORY_KINDS[category]:
             continue
 
         if item.conflict_group:

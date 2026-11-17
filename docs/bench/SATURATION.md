@@ -1,7 +1,7 @@
 # 饱和曲线 v1（D29）
 
 > 测量时间：2026-11-04 12:03（本机，Windows 11，12 逻辑核 / 16 GB）
-> 脚本：`scripts/bench_platform.py --ladder 2,4,8,12 --duration 10`
+> 脚本：`scripts/experiments/bench_platform.py --ladder 2,4,8,12 --duration 10`
 > 原始数据：`docs/bench/ladder-20261104-120322.csv` / `.json`
 
 ## 配置

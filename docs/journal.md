@@ -130,7 +130,7 @@
 - 明天第一件事：D23 G2 全链路 —— 助手 → 平台 → 沙箱 → 轨迹，准备 3 条 demo 命令与演示口径。
 ## D23 — 2026-11-04
 
-- 今天做了什么：打通 G2 全链路并做验收。为了「一句话触发 3 个工具」，把「一次响应允许的工具数」做成可配置（`PERSONAL_AGENT_MAX_TOOL_CALLS_PER_TURN`，默认 1，保持历史行为）；提醒类工具仍然单独限 1 条（`REMINDER_TOOL_NAMES` + `MAX_REMINDER_TOOL_CALLS`），避免多工具上限顺带放开「一轮多条提醒」这条产品红线。`agent_stream` 的校验拆成两个：总工具数上限、提醒工具数上限。新增 `scripts/verify_g2_chain.py`：真实 uvicorn + 真实 SSE + 真实 tier1 子进程，模型用本地脚本替身（确定性），一句话触发 `list_dir` / `g2_echo` / `list_dir` 三个工具，再用 `trace_run.py` 打出整条链路。
+- 今天做了什么：打通 G2 全链路并做验收。为了「一句话触发 3 个工具」，把「一次响应允许的工具数」做成可配置（`PERSONAL_AGENT_MAX_TOOL_CALLS_PER_TURN`，默认 1，保持历史行为）；提醒类工具仍然单独限 1 条（`REMINDER_TOOL_NAMES` + `MAX_REMINDER_TOOL_CALLS`），避免多工具上限顺带放开「一轮多条提醒」这条产品红线。`agent_stream` 的校验拆成两个：总工具数上限、提醒工具数上限。新增 `scripts/verification/verify_g2_chain.py`：真实 uvicorn + 真实 SSE + 真实 tier1 子进程，模型用本地脚本替身（确定性），一句话触发 `list_dir` / `g2_echo` / `list_dir` 三个工具，再用 `trace_run.py` 打出整条链路。
 - 验收与卡点：`tests/integration/test_agent_multi_tool.py` **3 个用例全绿**（默认上限仍拒绝 2 个工具且不产生 exec；上限 3 时 3 个工具全部成功、3 个 tool step、轨迹恰好 3 组 `exec_started`/`exec_finished` 且分属 3 个 step；提醒上限独立于总上限）。G2 脚本实测 PASS：`tool_started=3` / `tool_finished=3` / 3 条 exec 全 `succeeded` / 轨迹 3 组事件 / `trace_run.py` exit 0 打出 25 行（run → turn → 3 个 tool step → 终答），证据见 `docs/evidence/d23-g2-chain.json` 与 `d23-g2-server.log`。全量 **78 文件 / 710 用例 PASS，234.71 秒**，证据见 `docs/evidence/d23-backend-tests.txt`。
 - 遗留限制：① 「3 个工具」依赖模型一次响应并发多个 `tool_call`；若模型逐个返回，仍只是 1 个工具/轮（多轮 loop 留给 D30 之后）；② G2 演示里的模型是脚本替身，真实模型的 3 工具行为没有重复验证（单工具真实链路 D9 已验）；③ 工具数上限是进程级环境变量，改了要重启；④ 「面板」目前是 CLI（`trace_run.py`），Web 面板还没做；⑤ 三个工具里 `list_dir` 用了两次，演示的是「多工具」而不是「多不同工具」。
 - 补记（同日）：kimi 目录复跑时偶然撞到 `WinError 32`（临时目录里的 `platform.db` 仍被后台 worker 打开）。根因是终态写入后 worker 还要做 `end_exec` 并保留活动注册，测试拆目录正好撞上。修法：`_run_exec` 的 finally 改成**先 `end_exec` 再 `unregister`**（「还在活动表里」＝worker 可能还在碰库），测试侧加 `wait_for_exec_worker()` 等它退场。单测连跑 5 次稳定，全量复跑 710 全绿。
@@ -186,7 +186,7 @@
 
 - 补 D25：`/metrics`（Prometheus 文本格式）。六个核心指标：`execs_total{status}`、`exec_duration_seconds`（summary count/sum）、`exec_active`、`queue_depth{state}`、`sandboxes{state}`、`nodes_ready`。口径写死：前三个（execs/duration/sandboxes）来自 SQLite 跨进程共享，后三个是当前进程视角。
 - 补 D26：`PERSONAL_AGENT_LOG_JSON=1` 打开 JSONL 日志，`JsonLineFormatter` 输出 `ts/level/logger/msg/trace_id` 与白名单 extra；trace_id 取自 `src.core.trace_context`，同一请求的日志可按 trace_id 聚合。
-- 补 D27/D29：`scripts/bench_platform.py` 开放式到达率压测（固定 RPS 阶梯、真实服务、真实子进程），产出 CSV/JSON；实测拐点在 **8–12 RPS**（≤8 RPS p99 < 550ms、队列不积压；12 RPS 队列打满 16、p99 4.08s、10 次 `QUEUE_FULL`）。报告见 `docs/bench/SATURATION.md`。
+- 补 D27/D29：`scripts/experiments/bench_platform.py` 开放式到达率压测（固定 RPS 阶梯、真实服务、真实子进程），产出 CSV/JSON；实测拐点在 **8–12 RPS**（≤8 RPS p99 < 550ms、队列不积压；12 RPS 队列打满 16、p99 4.08s、10 次 `QUEUE_FULL`）。报告见 `docs/bench/SATURATION.md`。
 - 补 D30 尾巴：`docs/SLO.md` 草案，按实测数字写（可用性 ≥99.5%、≤4 RPS p99 ≤600ms、≤8 RPS p99 ≤1s、超容量允许 429 但不允许 5xx）。
 - **压测顺手抓到一个真 bug**：`node_local` 的租约没人续 —— 平台只在自己第一次 create 时注册节点，30 秒后租约过期 `accepting=false`，之后所有 create 都 429 `NO_READY_NODE`。修法：`ensure_default_node()` 在节点存在且未 removed 时**顺手续租**（代际不变）；removed 的节点不复活。新增 `test_default_node_renewal.py` 三条用例（含「把 last_heartbeat 拨回 5 分钟前再 create」的复现路径）。
 - 压测还暴露一个测量陷阱：客户端每条 exec 要轮询 `GET /v1/exec` 十几次，默认限流 600/min 会被轮询吃光（4 RPS 就 `RATE_LIMITED`）。压测脚本把限流调高、只测执行容量，并在 SATURATION.md 里写清口径。
@@ -194,7 +194,7 @@
 ## D37–D40 — 2026-11-04
 
 - D37 告警闭环：新增 `src/platform/alerts.py`，三条规则（`QUEUE_BACKLOG` / `NODE_NOT_READY` / `SANDBOX_FAILED`），`apply()` 对节点执行 cordon + drain（幂等）并写 `alert.fired` 审计；3 条用例全绿。
-- D38 故障注入：`scripts/fault_injection.py` 做三组实验并留档（队列塞满 429、节点停心跳 → `not_ready`、节点被摘除 → create 429 `NO_READY_NODE`），证据 `docs/evidence/d38-fault-injection.json`。
+- D38 故障注入：`scripts/experiments/fault_injection.py` 做三组实验并留档（队列塞满 429、节点停心跳 → `not_ready`、节点被摘除 → create 429 `NO_READY_NODE`），证据 `docs/evidence/d38-fault-injection.json`。
 - D39 runbook：`docs/RUNBOOK.md`，10 类故障的「怎么判断 / 怎么处置 / 怎么确认」。
 - D40 交付文档：`docs/architecture.md`（一张图 + 三个 trade-off）、`docs/postmortem.md`（默认节点租约 bug 的真实复盘）、`docs/resume.md`（200 字 + 60 字两版）、`docs/PLAN-STATUS.md`（计划对照与砍单理由）。
 - 砍单：D31–D36 不做了 —— 本机没有 Docker，也没有任何 C++ 工具链（docker / cl / g++ / clang++ / cmake 全缺）。计划第 5 节本来就把容器 tier 与 C++ SDK 列为可砍；没验证过的东西不写进交付。

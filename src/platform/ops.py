@@ -39,7 +39,7 @@ from src.platform.exec_store import (
     TERMINAL_EXEC_STATES,
     ExecStore,
 )
-from src.platform.node_registry import NodeRegistry
+from src.platform.node_registry import DEFAULT_NODE_ID, NodeRegistry
 from src.platform.sandbox_service import (
     MAX_TTL_SECONDS,
     InvalidArgument,
@@ -357,6 +357,17 @@ def cancel_exec(exec_id: str) -> tuple[dict[str, Any], str]:
 
 def cordon_node(node_id: str) -> dict[str, Any]:
     return NodeRegistry().cordon(node_id)
+
+
+def uncordon_node(node_id: str, *, renew_default: bool = False) -> dict[str, Any]:
+    registry = NodeRegistry()
+    registry.uncordon(node_id)
+
+    # 本机节点由平台进程本身保活；其他节点必须靠自己的心跳恢复租约。
+    if renew_default and node_id == DEFAULT_NODE_ID:
+        return registry.ensure_default_node()
+
+    return registry.get(node_id)
 
 
 def drain_node(node_id: str) -> dict[str, Any]:

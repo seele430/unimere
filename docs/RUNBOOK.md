@@ -61,7 +61,7 @@ curl -H "Authorization: Bearer <token>" "http://127.0.0.1:8000/v1/audit?limit=20
 ## 8. 磁盘涨得快
 
 - **判断**：`docs/bench/data`、沙箱目录、审计表变大。
-- **处置**：审计按 `PERSONAL_AGENT_AUDIT_RETENTION_DAYS`（默认 30 天，启动时清理）；沙箱靠 TTL + reaper；压测产物用 `scripts/bench_platform.py` 的临时目录，结束后删 `docs/bench/data`。
+- **处置**：审计按 `PERSONAL_AGENT_AUDIT_RETENTION_DAYS`（默认 30 天，启动时清理）；沙箱靠 TTL + reaper；压测产物用 `scripts/experiments/bench_platform.py` 的临时目录，结束后删 `docs/bench/data`。
 - **确认**：`personal_agent_sandboxes{state="reclaimed"}` 增长、目录大小回落。
 
 ## 9. 想看某一次对话到底发生了什么

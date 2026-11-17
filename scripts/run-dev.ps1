@@ -16,7 +16,7 @@
     详见 docs/RUNNING.md。
 
 .PARAMETER DataDir
-    数据目录。给了就用它（五个数据库全部落在那里），不碰项目根目录的真实数据。
+    数据目录。给了就用它（五个数据库全部落在那里），不碰项目 data 目录的真实数据。
     演示、联调、跑一次性实验都推荐配一个临时目录。
 
 .PARAMETER ApiPort
@@ -130,8 +130,12 @@ if ($DataDir) {
     $env:PERSONAL_AGENT_DATA_DIR = (Resolve-Path $DataDir).Path
     Write-Host "数据目录：$env:PERSONAL_AGENT_DATA_DIR（隔离，不动项目里的真实数据）"
 } else {
-    Remove-Item Env:\PERSONAL_AGENT_DATA_DIR -ErrorAction SilentlyContinue
-    Write-Host "数据目录：项目根目录（**真实数据**）"
+    $DataDir = Join-Path $repo "data"
+    if (-not (Test-Path $DataDir)) {
+        New-Item -ItemType Directory -Path $DataDir -Force | Out-Null
+    }
+    $env:PERSONAL_AGENT_DATA_DIR = (Resolve-Path $DataDir).Path
+    Write-Host "数据目录：$env:PERSONAL_AGENT_DATA_DIR"
 }
 
 if ($NoNtfy) {

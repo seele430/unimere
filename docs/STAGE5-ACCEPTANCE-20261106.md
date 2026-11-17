@@ -43,7 +43,7 @@
 | 取消后进程树退出 | `tests/integration/test_platform_exec_cancel.py`、`test_tier1_runner.py` |
 | 队列上限 / 429 / 终态 | `tests/integration/test_platform_queue.py` |
 | 租约失效不接活 | `tests/integration/test_platform_scheduling.py::test_expired_lease_stops_accepting` |
-| 回收无残留 | `scripts/verify_w34_residue.py`（本次 ok=true） |
+| 回收无残留 | `scripts/verification/verify_w34_residue.py`（本次 ok=true） |
 | owner 登录 / 首启建号 | `tests/test_auth_store.py`、`tests/integration/test_auth_bootstrap.py` |
 | 注册/邀请入口关闭 | `tests/integration/test_single_user_surface.py` |
 | 备份可恢复 | `tests/integration/test_backup_restore.py` |
@@ -58,11 +58,11 @@
 cd frontend; npm run build; npx playwright test
 
 # 残留
-.\.venv\Scripts\python.exe scripts\verify_w34_residue.py
+.\.venv\Scripts\python.exe scripts\verification\verify_w34_residue.py
 
 # 浏览器链路
 # 1) 准备数据目录并跑垂直切片
-.\.venv\Scripts\python.exe scripts\demo_route_pipeline.py --data-dir "$env:TEMP\pa-stage5-final"
+.\.venv\Scripts\python.exe scripts\demos\demo_route_pipeline.py --data-dir "$env:TEMP\pa-stage5-final"
 # 2) 建 owner
 .\.venv\Scripts\python.exe -c "from src.core.auth_store import AuthStore; AuthStore(r'$env:TEMP\pa-stage5-final\auth_users.db').bootstrap_owner('seele','stage5-accept-2026')"
 # 3) 起服务（绑定 127.0.0.1）

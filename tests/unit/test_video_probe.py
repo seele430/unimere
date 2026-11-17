@@ -16,7 +16,7 @@ from src.video.probe import (
 )
 
 
-DEMO = Path(r"C:\Users\123\Personal Agent\docs\Personal-Agent-Demo.mp4")
+DEMO = Path(__file__).resolve().parents[2] / "docs" / "Personal-Agent-Demo.mp4"
 
 
 def info(**overrides):

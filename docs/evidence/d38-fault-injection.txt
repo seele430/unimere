@@ -1,5 +1,5 @@
 # D38 故障注入实验
-> 命令：.venv/Scripts/python.exe scripts/fault_injection.py
+> 命令：.venv/Scripts/python.exe scripts/experiments/fault_injection.py
 > 时间：2026-11-04T12:12:52.6366655+08:00
 
 2026-11-04 12:12:55,477 | INFO | personal_agent.chat | Chat request storage ready

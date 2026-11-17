@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from src.auth_api import get_auth_store
 from src.core.auth_store import AuthStore
 from src.main import app
+from src.memory.store import MemoryStore
 from tests.helper import isolate_paths
 
 PASSWORD = "seeledeepseek2026"
@@ -66,6 +67,23 @@ class TestAuthBootstrap(unittest.TestCase):
 
         self.assertEqual(me.status_code, 200, me.text)
         self.assertEqual(me.json()["user"]["username"], "seele")
+
+    def test_bootstrap_adopts_legacy_memory_for_first_owner(self):
+        memory = MemoryStore(Path(self.tmp.name) / "knowledge.db")
+        legacy = memory.remember(
+            "legacy-owner", text="保留旧项目事实", kind="project_fact", layer="project"
+        )
+
+        response = self.bootstrap()
+        self.assertEqual(response.status_code, 201, response.text)
+        owner_id = response.json()["user"]["id"]
+        self.assertEqual(memory.get_item(legacy.id).owner_id, owner_id)
+        self.assertEqual(memory.list_items("legacy-owner"), [])
+        self.assertEqual(len(memory.list_items(owner_id)), 1)
+
+        second = self.bootstrap(username="intruder")
+        self.assertEqual(second.status_code, 409)
+        self.assertEqual(memory.get_item(legacy.id).owner_id, owner_id)
 
     def test_bootstrap_is_one_time(self):
         self.assertEqual(self.bootstrap().status_code, 201)

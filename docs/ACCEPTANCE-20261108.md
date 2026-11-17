@@ -1,7 +1,7 @@
 # Personal Agent 验收报告（v1.1 修订：吸收 2026-11-08 对账审查）
 
 **日期**：2026-11-08（修订于同日 22:40）
-**基线提交**：`ec656c6`（工作树干净，除历史未跟踪文件 `scripts/try_platform.py`）
+**基线提交**：`ec656c6`（工作树干净，除历史未跟踪文件 `scripts/demos/try_platform.py`）
 **报告性质**：阶段验收，不是上线签发
 **修订说明**：初版（`b89fd9b`）经外部对账审查后，按审查意见收窄状态、补基线证据、补过程偏差与实现漂移。
 
@@ -130,11 +130,11 @@ LibreOffice/Office 转换、模型 fallback、Sleep A/B、GPU 压测。
 | 后端全量 | `.\scripts\test.ps1 backend` | 收集 **1661**，**PASS 1655**，6 条 skip，exit 0 | `pa-acceptance-20261108/backend.log` |
 | 隔离审计 | `python scripts\run_tests.py audit` | PASS | 同次运行 |
 | 前端 | `cd frontend; npx playwright test` | **71 passed**（1.1 m） | `pa-acceptance-20261108/playwright.log` |
-| 端到端 | `python scripts\verify_e2e.py` | golden 10/10 + TLS 8/8 + collab PASS | `pa-acceptance-20261108/e2e.log` |
+| 端到端 | `python scripts\verification\verify_e2e.py` | golden 10/10 + TLS 8/8 + collab PASS | `pa-acceptance-20261108/e2e.log` |
 | 混合回归 | `python scripts\run_mixed_regression.py --rounds 10` | **10/10，红线 0，182.9 s** | `pa-acceptance-20261108/mixed.log` |
 | mock 单测单独跑 | `python -m unittest tests.unit.test_mock_provider` | **Ran 6 tests，OK** | `pa-acceptance-20261108/mock-standalone.log` |
-| GPU 保护自检 | `python scripts\verify_gpu_guard.py` | PASS（0 失败） | 见 STATUS §34 |
-| 文档一致性 | `python scripts\check_docs_consistency.py` | PASS（3 项） | 见 STATUS §38 |
+| GPU 保护自检 | `python scripts\verification\verify_gpu_guard.py` | PASS（0 失败） | 见 STATUS §34 |
+| 文档一致性 | `python scripts\verification\check_docs_consistency.py` | PASS（3 项） | 见 STATUS §38 |
 
 > 说明：**"1655 passed + 6 skipped" ≠ "1661 全过"**。6 条 mock 用例在受保护运行器下
 > 因回环连接被阻断而 skip，独立运行时 6 条全过（上表两行分别给出）。

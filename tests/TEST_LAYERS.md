@@ -17,9 +17,9 @@ python scripts/run_tests.py list integration  # 只列某一层
 python scripts/run_tests.py integration       # 运行该层
 ```
 
-<!-- membership-digest: 19be82c0d2f4ea5a -->
+<!-- membership-digest: 318e773431f1b519 -->
 
-## unit — L1 单元测试 (88 files)
+## unit — L1 单元测试 (93 files)
 
 | File | 物理位置 | Domain | DB | Network | Risk | Status |
 |---|---|---|---|---|---|---|
@@ -43,27 +43,31 @@ python scripts/run_tests.py integration       # 运行该层
 | `unit/test_agent_tool_limits.py` | tests/unit/ | reminder | none | mocked | medium | registered |
 | `unit/test_artifact_registry.py` | tests/unit/ | artifacts | temporary_sqlite | none | high | registered-inferred |
 | `unit/test_auth_compat.py` | tests/unit/ | auth | temporary_sqlite | none | medium | registered-inferred |
+| `unit/test_browser_tools.py` | tests/unit/ | tool_policy | temporary_sqlite | none | high | registered-inferred |
 | `unit/test_chunker.py` | tests/unit/ | knowledge | none | none | low | registered-inferred |
 | `unit/test_comfy_once.py` | tests/unit/ | tools | none | none | medium | registered-inferred |
 | `unit/test_comfy_tools.py` | tests/unit/ | tools | none | none | medium | registered-inferred |
 | `unit/test_cost_ledger.py` | tests/unit/ | cost | none | none | low | registered-inferred |
+| `unit/test_csv_summary_tools.py` | tests/unit/ | tool_policy | temporary_sqlite | none | high | registered-inferred |
 | `unit/test_diff_compare.py` | tests/unit/ | diff | none | none | low | registered-inferred |
 | `unit/test_docs_consistency.py` | tests/unit/ | docs | none | none | low | registered-inferred |
+| `unit/test_download_tools.py` | tests/unit/ | tool_policy | temporary_sqlite | mocked | high | registered-inferred |
 | `unit/test_dsh_exec_wrapper.py` | tests/unit/ | collab | none | none | medium | registered-inferred |
 | `unit/test_dsh_runner.py` | tests/unit/ | collab | none | none | medium | registered-inferred |
 | `unit/test_external_task_failover.py` | tests/unit/ | qq | none | mocked | medium | registered-inferred |
 | `unit/test_fault_matrix.py` | tests/unit/ | faults | temporary_sqlite | mocked | high | registered-inferred |
 | `unit/test_fault_reconcile.py` | tests/unit/ | faults | temporary_sqlite | none | medium | registered-inferred |
 | `unit/test_gpu_guard.py` | tests/unit/ | tools | none | none | high | registered-inferred |
-| `unit/test_launch_watcher.py` | tests/unit/ | qq | temporary_sqlite | none | low | registered-inferred |
 | `unit/test_lifecycle_files.py` | tests/unit/ | lifecycle | none | none | high | registered-inferred |
 | `unit/test_lifecycle_retention.py` | tests/unit/ | lifecycle | temporary_sqlite | none | high | registered-inferred |
+| `unit/test_memory_engine.py` | tests/unit/ | memory | temporary_sqlite | none | medium | registered-inferred |
 | `unit/test_memory_eval.py` | tests/unit/ | memory | temporary_sqlite | none | medium | registered-inferred |
 | `unit/test_memory_resolve.py` | tests/unit/ | memory | temporary_sqlite | none | medium | registered-inferred |
 | `unit/test_memory_service.py` | tests/unit/ | memory | temporary_sqlite | none | medium | registered-inferred |
 | `unit/test_memory_store.py` | tests/unit/ | memory | temporary_sqlite | none | medium | registered-inferred |
 | `unit/test_memory_tools.py` | tests/unit/ | memory | temporary_sqlite | none | medium | registered-inferred |
 | `unit/test_memory_versions.py` | tests/unit/ | memory | temporary_sqlite | none | medium | registered-inferred |
+| `unit/test_memory_work.py` | tests/unit/ | memory | temporary_sqlite | none | medium | registered-inferred |
 | `unit/test_mock_provider.py` | tests/unit/ | collab | none | mocked | low | registered-inferred |
 | `unit/test_notification.py` | tests/unit/ | notification | none | mocked | low | registered-inferred |
 | `unit/test_ops_cli.py` | tests/unit/ | ops | temporary_sqlite | none | high | registered-inferred |
@@ -76,7 +80,6 @@ python scripts/run_tests.py integration       # 运行该层
 | `unit/test_platform_ttl_extend.py` | tests/unit/ | platform_ttl | temporary_sqlite | none | medium | registered-inferred |
 | `unit/test_provider_factory.py` | tests/unit/ | collab | none | none | low | registered-inferred |
 | `unit/test_provider_tools.py` | tests/unit/ | agent_tools | none | mocked | medium | registered-inferred |
-| `unit/test_qq_api.py` | tests/unit/ | qq | none | mocked | medium | registered-inferred |
 | `unit/test_qq_continue.py` | tests/unit/ | qq | temporary_sqlite | mocked | medium | registered-inferred |
 | `unit/test_qq_inbound.py` | tests/unit/ | qq | none | mocked | medium | registered-inferred |
 | `unit/test_qq_outbox.py` | tests/unit/ | qq | temporary_sqlite | mocked | medium | registered-inferred |
@@ -101,8 +104,10 @@ python scripts/run_tests.py integration       # 运行该层
 | `unit/test_research_llm.py` | tests/unit/ | research | none | mocked | medium | registered-inferred |
 | `unit/test_research_prompts.py` | tests/unit/ | research | none | none | low | registered-inferred |
 | `unit/test_research_report.py` | tests/unit/ | research | temporary_sqlite | none | medium | registered-inferred |
+| `unit/test_sandbox_tool_visibility.py` | tests/unit/ | tool_policy | none | none | high | registered-inferred |
 | `unit/test_scorecard.py` | tests/unit/ | eval | none | none | low | registered-inferred |
 | `unit/test_sessions.py` | tests/unit/ | knowledge | temporary_sqlite | none | medium | registered-inferred |
+| `unit/test_skill_system.py` | tests/unit/ | skills | none | none | medium | registered-inferred |
 | `unit/test_url_policy.py` | tests/unit/ | rss | none | mocked | high | registered-inferred |
 | `unit/test_video_asr.py` | tests/unit/ | video | none | none | low | registered-inferred |
 | `unit/test_video_pipeline.py` | tests/unit/ | video | none | none | medium | registered-inferred |
@@ -112,7 +117,7 @@ python scripts/run_tests.py integration       # 运行该层
 | `unit/test_web_extract.py` | tests/unit/ | web | none | none | low | registered-inferred |
 | `unit/test_web_search.py` | tests/unit/ | web | none | mocked | medium | registered-inferred |
 
-## integration — L2 数据集成测试 (83 files)
+## integration — L2 数据集成测试 (84 files)
 
 | File | 物理位置 | Domain | DB | Network | Risk | Status |
 |---|---|---|---|---|---|---|
@@ -168,6 +173,7 @@ python scripts/run_tests.py integration       # 运行该层
 | `test_access_policy_dispatcher.py` | tests/ 根 | access_policy | temporary_sqlite | mocked | medium | registered-inferred |
 | `test_admin_alerts.py` | tests/ 根 | alerting | temporary_sqlite | none | medium | registered-inferred |
 | `test_agent_stream.py` | tests/ 根 | agent_stream | temporary_sqlite | mocked | high | registered-inferred |
+| `test_agent_stream_work_memory.py` | tests/ 根 | agent_stream | temporary_sqlite | mocked | high | registered-inferred |
 | `test_agent_usage_trace.py` | tests/ 根 | agent | temporary_sqlite | mocked | high | registered-inferred |
 | `test_ai_budget.py` | tests/ 根 | billing | temporary_sqlite | none | high | registered |
 | `test_ai_budget_reconcile.py` | tests/ 根 | billing | temporary_sqlite | none | high | registered |

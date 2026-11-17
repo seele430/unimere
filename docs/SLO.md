@@ -43,12 +43,12 @@
 2. **不是分布式**：限流、队列、活跃表都是进程内的。
 3. **不承诺多租户隔离**：`X-Tenant-Id` 由调用方自报。
 4. **不承诺 exec 自动重放**：`/v1` 的 exec 没有幂等（契约 §3.2）。
-5. **SLO 只在单机口径下成立**：换机器要重测（脚本在 `scripts/bench_platform.py`）。
+5. **SLO 只在单机口径下成立**：换机器要重测（脚本在 `scripts/experiments/bench_platform.py`）。
 
 ## 6. 复核方式
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\bench_platform.py --ladder 2,4,8,12 --duration 10
+.\.venv\Scripts\python.exe scripts\experiments\bench_platform.py --ladder 2,4,8,12 --duration 10
 .\.venv\Scripts\python.exe scripts\run_guarded_tests.py backend
 ```
 

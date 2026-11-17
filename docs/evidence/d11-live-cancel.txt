@@ -1,6 +1,6 @@
 # D11 真实 HTTP / SSE 断流验收
 
-> 命令：.venv/Scripts/python.exe scripts/verify_d11_cancel.py
+> 命令：.venv/Scripts/python.exe scripts/verification/verify_d11_cancel.py
 > 原始证据：docs/evidence/d11-live-cancel.json
 
 模型调用为本地替身；平台、runner、进程树、SQLite 都是真的。

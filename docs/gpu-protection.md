@@ -82,7 +82,7 @@ nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits
 .\.venv\Scripts\python.exe -m unittest tests.unit.test_comfy_tools -q
 
 # 4) 错误路径（服务未起时必须是中文提示）
-.\.venv\Scripts\python.exe scripts\verify_comfy_tool.py
+.\.venv\Scripts\python.exe scripts\verification\verify_comfy_tool.py
 ```
 
 **红线**：不要为了"快一点"把 `steps` 上限、显存预检、`batch=1`、`--lowvram` 任何一项去掉。

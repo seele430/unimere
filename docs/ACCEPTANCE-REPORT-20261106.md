@@ -67,7 +67,7 @@ git pull
 | B2 | 扩容稳定 + 缩容冷却 + 事件 | ✅ 单测 4 条 | 同上 |
 | B3 | 节点失联停止接活 | ✅ 租约过期 → `accepting=False` → 不调度 | `tests/integration/test_platform_scheduling.py::test_expired_lease_stops_accepting` |
 | B4 | 固定 vs 弹性对照 | ✅ 峰值积压 -71.9%，平均 -98.2%，丢弃 296→0 | `docs/bench/autoscale-compare.*`、`docs/ELASTIC-REPORT-RESULTS.md` |
-| B5 | 回收无残留 | ✅ 目录/DB/进程 = 0/0/0 | `docs/evidence/w34-residue.json`、`scripts/verify_w34_residue.py` |
+| B5 | 回收无残留 | ✅ 目录/DB/进程 = 0/0/0 | `docs/evidence/w34-residue.json`、`scripts/verification/verify_w34_residue.py` |
 
 ### C 正式压测
 
@@ -158,18 +158,18 @@ git pull
 
 # 路由
 .\.venv\Scripts\python.exe scripts\eval_router.py --split test
-.\.venv\Scripts\python.exe scripts\demo_route_pipeline.py
+.\.venv\Scripts\python.exe scripts\demos\demo_route_pipeline.py
 
 # 弹性 / 回收
 .\.venv\Scripts\python.exe scripts\autoscale_compare.py
-.\.venv\Scripts\python.exe scripts\verify_w34_residue.py
+.\.venv\Scripts\python.exe scripts\verification\verify_w34_residue.py
 
 # 控制台
 .\.venv\Scripts\python.exe scripts\console_overview.py --data-dir <数据目录>
 
 # 压测（单档 10 分钟；先清 bench 数据）
 Remove-Item -Recurse -Force docs\bench\data,docs\bench\sandboxes -ErrorAction SilentlyContinue
-.\.venv\Scripts\python.exe scripts\bench_platform.py --ladder 4 --minutes 10
+.\.venv\Scripts\python.exe scripts\experiments\bench_platform.py --ladder 4 --minutes 10
 ```
 
 ---

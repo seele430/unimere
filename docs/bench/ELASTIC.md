@@ -1,7 +1,7 @@
 # 正式压测方案与判据（预定义）
 
 > 定义时间：2026-11-05（**先写判据，后跑压测**；跑完不得修改）
-> 脚本：`scripts/bench_platform.py`（开环固定 RPS、真实 uvicorn 子进程、psutil 资源采样）
+> 脚本：`scripts/experiments/bench_platform.py`（开环固定 RPS、真实 uvicorn 子进程、psutil 资源采样）
 
 ## 1. 配置
 
@@ -38,16 +38,16 @@
 
 ```powershell
 # 2 RPS × 10 分钟
-.\.venv\Scripts\python.exe scripts\bench_platform.py --ladder 2 --minutes 10
+.\.venv\Scripts\python.exe scripts\experiments\bench_platform.py --ladder 2 --minutes 10
 
 # 4 RPS × 10 分钟
-.\.venv\Scripts\python.exe scripts\bench_platform.py --ladder 4 --minutes 10
+.\.venv\Scripts\python.exe scripts\experiments\bench_platform.py --ladder 4 --minutes 10
 
 # 8 RPS × 10 分钟（重复 3 次）
-.\.venv\Scripts\python.exe scripts\bench_platform.py --ladder 8 --minutes 10 --repeat 3
+.\.venv\Scripts\python.exe scripts\experiments\bench_platform.py --ladder 8 --minutes 10 --repeat 3
 
 # 12 RPS × 10 分钟
-.\.venv\Scripts\python.exe scripts\bench_platform.py --ladder 12 --minutes 10
+.\.venv\Scripts\python.exe scripts\experiments\bench_platform.py --ladder 12 --minutes 10
 ```
 
 ## 5. 已知局限

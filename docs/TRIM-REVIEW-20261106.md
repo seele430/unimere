@@ -105,7 +105,7 @@ Get-ChildItem tests -Recurse -Filter '*.py' |
   Where-Object { $_.Name -match 'routing_policy|exec_cancel|single_user' }
 ```
 
-红线清单：`test_routing_policy.py`、`test_agent_stream.py`（取消/澄清）、`tests/integration/test_platform_exec_cancel.py`、`tests/integration/test_single_user_surface.py`、`scripts/verify_w34_residue.py`。
+红线清单：`test_routing_policy.py`、`test_agent_stream.py`（取消/澄清）、`tests/integration/test_platform_exec_cancel.py`、`tests/integration/test_single_user_surface.py`、`scripts/verification/verify_w34_residue.py`。
 
 ---
 

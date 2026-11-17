@@ -38,7 +38,7 @@ def main() -> int:
     parser.add_argument(
         "--data-dir",
         default=None,
-        help="数据目录；默认读 PERSONAL_AGENT_DATA_DIR，再默认项目根",
+        help="数据目录；默认读 PERSONAL_AGENT_DATA_DIR，再默认项目 data 目录",
     )
     args = parser.parse_args()
 

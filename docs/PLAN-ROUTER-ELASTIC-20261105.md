@@ -81,7 +81,7 @@ route_decided(data.analysis)
 | **W1.1** | 路由设计：intent / 决策对象 / 风险 / 平台契约 | `docs/design-intent-router.md` | 字段与不变量定死 | 0.5 天 | — | ✅ |
 | **W1.2** | `RouteDecision` + 规则路由（5 intent + clarify） | `src/routing/` | 单测覆盖 5 类 + 澄清 + 高危 | 0.5 天 | W1.1 | ✅ |
 | **W1.3** | `route_decided` 写入轨迹 | 轨迹 schema + 测试 | 一条 run 能看到该事件 | 0.25 天 | W1.2 | ✅ |
-| **W1.4** | CSV 垂直切片：消息 → 沙箱 → `chart.png` | `scripts/demo_route_pipeline.py` | 真实产出文件 + trace 完整 | 0.5 天 | W1.3 | ✅ |
+| **W1.4** | CSV 垂直切片：消息 → 沙箱 → `chart.png` | `scripts/demos/demo_route_pipeline.py` | 真实产出文件 + trace 完整 | 0.5 天 | W1.3 | ✅ |
 | **W1.5** | 确定性审批闸门（高危 100% 审批） | `src/policy/` 或复用审批 | 高危漏审批 = 0 | 0.25 天 | W1.2 | ✅ |
 | **W2.1** | 评估集：5 类 + 高危子集，去重，train/dev/test，冻结 test | `tests/data/router-eval.jsonl` | test 集哈希固定 | 0.5 天 | W1.2 | ✅ |
 | **W2.2** | 评估脚本：macro-F1、各类 P/R、混淆矩阵、高危漏审批 | `scripts/eval_router.py` | 报告可复现 | 0.5 天 | W2.1 | ✅ |
@@ -91,7 +91,7 @@ route_decided(data.analysis)
 | **W3.1** | 模型/供应商故障安全降级 | 路由策略 + 测试 | 主模型故障仍能完成 | 0.5 天 | W2.3 | ✅ |
 | **W3.2** | 节点失联停止接活（补验证） | 故障注入脚本 | 停心跳后不再调度 | 0.25 天 | W1.3 | ✅ |
 | **W3.3** | 固定容量 vs 弹性容量对照实验 | `docs/bench/autoscale-compare.*` | 队列等待/p99/背压/资源 | 1 天 | W2.5 | ✅ |
-| **W3.4** | 回收无残留（进程/目录/DB） | `scripts/verify_w34_residue.py` | 残留 = 0 | 0.5 天 | W1.4 | ✅ |
+| **W3.4** | 回收无残留（进程/目录/DB） | `scripts/verification/verify_w34_residue.py` | 残留 = 0 | 0.5 天 | W1.4 | ✅ |
 | **W4.1** | 控制台同页：路由原因 / 队列 / 节点 / exec / 成本 | 前端 + API | 一屏可读 | 1 天 | W1.4, W2.5 | ✅ 前端 + CLI |
 | **W4.2** | 路由结果报告 | `docs/ROUTER-REPORT.md` | 指标可追溯 | 0.5 天 | W2.2 | ✅ |
 | **W4.3** | 平台结果报告 | `docs/ELASTIC-REPORT-RESULTS.md` | 指标可追溯 | 0.5 天 | W3.3 | ✅ |
@@ -117,7 +117,7 @@ route_decided(data.analysis)
 | W1.1 | 路由设计文档：intent、决策对象、风险等级、与平台契约 | `docs/design-intent-router.md` | 评审通过；字段定死 |
 | W1.2 | `RouteDecision` + 规则路由骨架（5 intent + clarify） | `src/routing/` | 单测覆盖 5 类 + 未知 + 高危 |
 | W1.3 | `route_decided` 写入轨迹（intent/confidence/risk/reason/fallback） | 轨迹 schema + 测试 | 一条 run 能看到该事件 |
-| W1.4 | 数据分析垂直切片：消息 → 路由 → 沙箱 exec → `chart.png` | `scripts/demo_route_pipeline.py` | 真实产出文件；trace 完整 |
+| W1.4 | 数据分析垂直切片：消息 → 路由 → 沙箱 exec → `chart.png` | `scripts/demos/demo_route_pipeline.py` | 真实产出文件；trace 完整 |
 | W1.5 | 确定性审批闸门接入（高风险必须审批，不依赖置信度） | `src/policy/` 或复用现有审批 | 高危用例 100% 需审批 |
 
 ### W2 任务
@@ -146,7 +146,7 @@ route_decided(data.analysis)
 | W4.1 | 控制台同页展示：路由原因、队列、节点、exec、成本 | 前端 + API | 一屏可读 |
 | W4.2 | 路由报告 | `docs/ROUTER-REPORT.md` | 指标可追溯 |
 | W4.3 | 平台报告 | `docs/ELASTIC-REPORT-RESULTS.md` | 指标可追溯 |
-| W4.4 | 现场演示脚本 | `scripts/demo_route_pipeline.py` | 一条命令跑完 |
+| W4.4 | 现场演示脚本 | `scripts/demos/demo_route_pipeline.py` | 一条命令跑完 |
 
 ---
 

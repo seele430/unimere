@@ -286,6 +286,19 @@ def cordon_node(node_id: str):
     )
 
 
+@router.post("/nodes/{node_id}/uncordon", status_code=202)
+def uncordon_node(node_id: str):
+    try:
+        row = platform_ops.uncordon_node(node_id)
+    except PlatformError as exc:
+        return _node_ops_error(exc)
+
+    return JSONResponse(
+        status_code=202,
+        content=_node_body(row, active_sandboxes=_active_sandboxes(node_id)),
+    )
+
+
 @router.post("/nodes/{node_id}/drain", status_code=202)
 def drain_node(node_id: str):
     try:

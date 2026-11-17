@@ -38,7 +38,7 @@
 
 | 参数 | 作用 |
 | --- | --- |
-| `-DataDir <路径>` | 数据目录。给了就用它（五个数据库全落那儿），**不碰项目根目录的真实数据** |
+| `-DataDir <路径>` | 指定隔离数据目录；未指定时统一使用项目 `data/`，可用 `PERSONAL_AGENT_DATA_DIR` 覆盖 |
 | `-ApiPort <端口>` | API 端口，默认 8000。改了要同步改 `frontend/vite.config.ts` 的代理 |
 | `-NoNtfy` | 清空 `NTFY_TOPIC`：站长的通知会投递失败，而**不会真的推到手机** |
 | `-NoFrontend` | 只起后端三件套 |
@@ -102,7 +102,7 @@ Personal Agent - service self-check
 
 ## 环境变量
 
-`.env`（仓库根目录，已被 `.gitignore` 忽略）里需要这些键：
+`data/.env`（整个 `data/` 已被 `.gitignore` 忽略）里需要这些键：
 
 | 键 | 用途 |
 | --- | --- |

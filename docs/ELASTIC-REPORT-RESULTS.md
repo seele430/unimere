@@ -13,7 +13,7 @@
 | 期望容量 | `src/platform/autoscale.py::desired_capacity` | 单测覆盖空闲/排队/headroom/上限 |
 | 扩缩容控制器 | `Autoscaler`（扩容稳定 2 次、缩容冷却 60 s、事件） | 冷却真实生效，事件可查 |
 | 节点失联停止接活 | 租约过期 → `accepting=False` → `pick_node` 跳过 | 集成测试 |
-| 回收无残留 | `scripts/verify_w34_residue.py` | 目录 / DB / 进程均为 0 |
+| 回收无残留 | `scripts/verification/verify_w34_residue.py` | 目录 / DB / 进程均为 0 |
 | 固定 vs 弹性对照 | `scripts/autoscale_compare.py` | 见下表 |
 
 ## 2. 固定 vs 弹性（离散时间仿真）
@@ -64,6 +64,6 @@
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\autoscale_compare.py
-.\.venv\Scripts\python.exe scripts\verify_w34_residue.py
+.\.venv\Scripts\python.exe scripts\verification\verify_w34_residue.py
 .\.venv\Scripts\python.exe -m unittest tests.test_autoscale tests.integration.test_platform_scheduling
 ```

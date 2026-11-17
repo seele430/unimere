@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
-sys.path.insert(0, r"C:\Users\123\Personal Agent")
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import scripts.activity_timeline as timeline_cli  # noqa: E402
 import scripts.lifecycle_report as lifecycle_cli  # noqa: E402

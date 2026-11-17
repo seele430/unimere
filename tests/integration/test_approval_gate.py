@@ -306,6 +306,106 @@ class ApprovalGateTest(unittest.TestCase):
         self.assertEqual(approval_events[0]["approval_id"], approval["id"])
 
     # ------------------------------------------------------------------
+    # P1：Python / Shell 批准后真实执行；HTTP 拒绝前零 exec、零请求
+    # ------------------------------------------------------------------
+
+    def test_run_python_approved_executes_once(self):
+        future = self.start("run_python", '{"code": "print(40 + 2)"}')
+        approval = self.wait_pending()
+        self.assertEqual(self.exec_rows(), [])
+        self.store().decide_approval(
+            approval["id"], decision="approve", decided_by="alice"
+        )
+        future.result(timeout=60)
+
+        self.assertEqual([row[1] for row in self.exec_rows()], ["succeeded"])
+        result = next(
+            event["result"] for event in self.events
+            if event["type"] == "tool_finished" and event["tool"] == "run_python"
+        )
+        self.assertEqual(result["exit_code"], 0)
+        self.assertIn("42", result["stdout"])
+
+    def test_run_shell_approved_executes_once(self):
+        future = self.start("run_shell", '{"command": "echo p1-shell-ok"}')
+        approval = self.wait_pending()
+        self.assertEqual(self.exec_rows(), [])
+        self.store().decide_approval(
+            approval["id"], decision="approve", decided_by="alice"
+        )
+        future.result(timeout=60)
+
+        self.assertEqual([row[1] for row in self.exec_rows()], ["succeeded"])
+        result = next(
+            event["result"] for event in self.events
+            if event["type"] == "tool_finished" and event["tool"] == "run_shell"
+        )
+        self.assertEqual(result["exit_code"], 0)
+        self.assertIn("p1-shell-ok", result["stdout"])
+
+    def test_http_get_rejected_has_no_exec(self):
+        future = self.start(
+            "http_get", '{"url": "http://127.0.0.1:1/should-not-run"}'
+        )
+        approval = self.wait_pending()
+        self.assertEqual(self.exec_rows(), [])
+        self.store().decide_approval(
+            approval["id"], decision="reject", decided_by="alice"
+        )
+        future.result(timeout=30)
+
+        self.assertEqual(self.exec_rows(), [])
+        self.assertIn("tool_denied", [event["type"] for event in self.events])
+
+    def test_browser_preview_rejected_has_no_exec_or_artifact(self):
+        future = self.start(
+            "browser_preview", '{"url": "http://127.0.0.1:1/should-not-open"}'
+        )
+        approval = self.wait_pending()
+        self.assertEqual(self.exec_rows(), [])
+        self.store().decide_approval(
+            approval["id"], decision="reject", decided_by="alice"
+        )
+        future.result(timeout=30)
+
+        self.assertEqual(self.exec_rows(), [])
+        self.assertIn("tool_denied", [event["type"] for event in self.events])
+        from src.artifacts.registry import ArtifactRegistry
+        self.assertEqual(ArtifactRegistry().count("alice"), 0)
+
+    def test_http_download_rejected_has_no_exec_or_artifact(self):
+        future = self.start(
+            "http_download", '{"url": "http://127.0.0.1:1/data.csv"}'
+        )
+        approval = self.wait_pending()
+        self.assertEqual(self.exec_rows(), [])
+        self.store().decide_approval(
+            approval["id"], decision="reject", decided_by="alice"
+        )
+        future.result(timeout=30)
+
+        self.assertEqual(self.exec_rows(), [])
+        self.assertIn("tool_denied", [event["type"] for event in self.events])
+        from src.artifacts.registry import ArtifactRegistry
+        self.assertEqual(ArtifactRegistry().count("alice"), 0)
+
+    def test_csv_summarize_rejected_has_no_exec_or_artifact(self):
+        future = self.start(
+            "csv_summarize", '{"artifact_id": "art_should_not_be_read"}'
+        )
+        approval = self.wait_pending()
+        self.assertEqual(self.exec_rows(), [])
+        self.store().decide_approval(
+            approval["id"], decision="reject", decided_by="alice"
+        )
+        future.result(timeout=30)
+
+        self.assertEqual(self.exec_rows(), [])
+        self.assertIn("tool_denied", [event["type"] for event in self.events])
+        from src.artifacts.registry import ArtifactRegistry
+        self.assertEqual(ArtifactRegistry().count("alice"), 0)
+
+    # ------------------------------------------------------------------
     # 3. 只能决定一次；别人不能决定
     # ------------------------------------------------------------------
 

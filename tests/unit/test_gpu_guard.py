@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 
 def run_main():
-    import scripts.verify_gpu_guard as guard
+    import scripts.verification.verify_gpu_guard as guard
 
     importlib.reload(guard)
     buffer = io.StringIO()
@@ -34,7 +34,7 @@ class GuardCase(unittest.TestCase):
         self.assertNotIn("FAIL  ", output)
 
     def test_steps_limit_drift_detected(self):
-        from scripts import verify_gpu_guard as guard
+        from scripts.verification import verify_gpu_guard as guard
         import src.tools.comfy_tools as tools
 
         with patch.object(tools, "MAX_STEPS", 60):
@@ -47,7 +47,7 @@ class GuardCase(unittest.TestCase):
         self.assertIn("steps 上限", buffer.getvalue())
 
     def test_vram_threshold_drift_detected(self):
-        from scripts import verify_gpu_guard as guard
+        from scripts.verification import verify_gpu_guard as guard
         import src.tools.comfy_tools as tools
 
         with patch.object(tools, "MIN_FREE_VRAM_MB", 500):
@@ -60,7 +60,7 @@ class GuardCase(unittest.TestCase):
         self.assertIn("显存门槛", buffer.getvalue())
 
     def test_timeout_drift_detected(self):
-        from scripts import verify_gpu_guard as guard
+        from scripts.verification import verify_gpu_guard as guard
         import src.tools.comfy_tools as tools
 
         with patch.object(tools, "DEFAULT_TIMEOUT", 600.0):
