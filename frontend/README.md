@@ -1,32 +1,32 @@
-# React + TypeScript + Vite
+# Unimere 前端
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Unimere 的网页端，使用 React 19、TypeScript 和 Vite。包含对话、提醒、任务、产物、活动时间线和平台控制台等界面。
 
-Currently, two official plugins are available:
+完整启动方式见仓库根目录的 `README.md`。前端开发服务器把 `/api` 代理到 `http://127.0.0.1:8000`，联调时需要先准备后端。
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 开发
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```powershell
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+默认地址为 <http://127.0.0.1:5173>。也可以从仓库根目录运行 `.\scripts\run-dev.ps1`，同时启动前端和后端服务。
+
+## 检查与构建
+
+```powershell
+npm run lint
+npm run build
+```
+
+## 端到端测试
+
+测试位于 `tests/`，使用 Playwright：
+
+```powershell
+npx playwright test
+npx playwright test tests/console.spec.ts
+```
+
+测试配置会启动 Vite 开发服务器；如果 5173 端口已有服务，则复用该服务。涉及后端接口的用例需要先按根目录文档准备运行环境。
