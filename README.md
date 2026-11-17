@@ -4,7 +4,7 @@
 >
 > Many flows. One clear space.
 
-[展示页](https://seele430.github.io/) · [演示视频](docs/Personal-Agent-Demo.mp4) · [QQ 接入说明](docs/qq-official.md)
+[展示页](https://seele430.github.io/) · [演示视频](docs/Personal-Agent-Demo.mp4) · [QQ 接入说明](docs/qq-official.md) · [English](README.en.md)
 
 Unimere 是我给自己用的本地工作台，把网页对话、提醒、定时任务、产物和 QQ 消息放在同一个地方。后端使用 FastAPI 和 SQLite，前端使用 React。
 
