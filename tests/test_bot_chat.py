@@ -19,7 +19,7 @@ class TestBuildSystemPrompt(unittest.TestCase):
     def test_default_prompt(self):
         prompt = build_system_prompt(_now())
 
-        self.assertIn("你是 Personal Agent", prompt)
+        self.assertIn("你是 Unimere（一泓）", prompt)
         self.assertIn("create_reminder", prompt)
 
     def test_bot_prompt_uses_identity_card(self):
@@ -35,7 +35,7 @@ class TestBuildSystemPrompt(unittest.TestCase):
         self.assertIn("风险厌恶者", prompt)
         self.assertIn("永远先算代价", prompt)
         # 不再是默认人设
-        self.assertNotIn("你是 Personal Agent", prompt)
+        self.assertNotIn("你是 Unimere（一泓）", prompt)
 
     def test_bot_prompt_keeps_tool_rules(self):
         bot = {

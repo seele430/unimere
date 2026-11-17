@@ -26,7 +26,7 @@ async function mockAuthState(page: import("@playwright/test").Page) {
   );
 }
 
-test.describe("Personal Agent Login Gate", () => {
+test.describe("Unimere Login Gate", () => {
 
   test("直接访问根路径必须进入登录页面", async ({ page }) => {
     const unexpected = await blockUnmockedApi(page);

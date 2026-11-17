@@ -621,7 +621,7 @@ class TaskWorker(BaseWorker):
         context_info = ""
 
         if decision["intent"] == "status":
-            text = "Personal Agent 在线；QQ 入站已接通。"
+            text = "Unimere（一泓）在线；QQ 入站已接通。"
 
             try:
                 from src.collab.orchestrator import Orchestrator

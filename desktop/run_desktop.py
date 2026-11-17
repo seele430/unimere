@@ -1,4 +1,4 @@
-"""Personal Agent 桌面版入口。
+"""Unimere 桌面版入口。
 
 一个进程里同时跑：
   - api（uvicorn，线程）
@@ -47,7 +47,7 @@ def _data_dir() -> str:
     return path
 
 
-ENV_TEMPLATE = """# Personal Agent 配置
+ENV_TEMPLATE = """# Unimere 配置
 # 填入你自己的 DeepSeek（或任意 OpenAI 兼容）API Key 后重启本程序。
 
 OPENAI_API_KEY=
@@ -198,16 +198,16 @@ STARTUP_HTML = """<!doctype html>
   .mark { width: 76px; height: 76px; margin: 0 auto 24px; display: grid;
     place-items: center; border-radius: 22px; color: white; font-size: 28px;
     font-weight: 750; letter-spacing: -2px;
-    background: linear-gradient(145deg, #25268d, #6835d2);
-    box-shadow: 0 18px 44px rgba(64, 45, 170, .22); }
+    background: linear-gradient(145deg, #123f46, #24656a);
+    box-shadow: 0 18px 44px rgba(18, 63, 70, .22); }
   h1 { margin: 0 0 12px; font-size: 28px; }
   p { margin: 0; color: #758099; font-size: 15px; }
   .dot { display: inline-block; width: 7px; height: 7px; margin-right: 9px;
-    border-radius: 50%; background: #6845d6; animation: pulse 1s infinite alternate; }
+    border-radius: 50%; background: #5db9b4; animation: pulse 1s infinite alternate; }
   @keyframes pulse { to { opacity: .25; transform: scale(.75); } }
 </style>
 </head>
-<body><main><div class="mark">PA</div><h1>Personal Agent</h1>
+<body><main><div class="mark">U</div><h1>Unimere｜一泓</h1>
 <p><span class="dot"></span>正在准备工作区，请稍候…</p></main></body>
 </html>"""
 
@@ -221,7 +221,7 @@ def _initialize_window(window: "object") -> None:
         _log(f"api FAILED: {error!r}")
         window.load_html(
             "<html lang='zh-CN'><body style='font-family:sans-serif;padding:48px'>"
-            "<h2>Personal Agent 启动失败</h2><p>请查看数据目录中的 boot.log。</p>"
+            "<h2>Unimere 启动失败</h2><p>请查看数据目录中的 boot.log。</p>"
             "</body></html>"
         )
         return
@@ -242,7 +242,7 @@ def main() -> None:
     if _run_edge_tts_cli():
         return
 
-    parser = argparse.ArgumentParser(description="启动 Personal Agent 桌面版")
+    parser = argparse.ArgumentParser(description="启动 Unimere 桌面版")
     parser.add_argument("--port", type=int, default=PORT, help="本地 API 端口")
     parser.add_argument("--data-dir", default="", help="已有配置和数据目录")
     args = parser.parse_args()
@@ -265,7 +265,7 @@ def main() -> None:
 
     _log("creating window")
     window = webview.create_window(
-        "Personal Agent",
+        "Unimere",
         html=STARTUP_HTML,
         width=1320,
         height=860,

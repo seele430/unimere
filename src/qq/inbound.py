@@ -182,7 +182,7 @@ class QQInbound:
 
     def reply_for(self, command: str, question: str, *, context: str = "") -> str:
         if command == "status":
-            return "Personal Agent 在线；QQ 入站已接通。"
+            return "Unimere（一泓）在线；QQ 入站已接通。"
 
         if command == "ask":
             return self._ask(question, context)

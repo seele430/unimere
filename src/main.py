@@ -148,7 +148,7 @@ async def lifespan(_app: FastAPI):
 # ==========================================
 
 app = FastAPI(
-    title="Personal Agent API",
+    title="Unimere API",
     lifespan=lifespan,
 )
 

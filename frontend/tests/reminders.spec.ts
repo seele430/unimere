@@ -84,10 +84,10 @@ async function login(page: Page): Promise<void> {
 }
 
 // ==========================================
-// Personal Agent 站内提醒
+// Unimere 站内提醒
 // ==========================================
 
-test.describe("Personal Agent Reminders", () => {
+test.describe("Unimere Reminders", () => {
 
   // 1. 面板列出自己的提醒，并区分状态
 

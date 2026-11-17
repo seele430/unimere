@@ -27,7 +27,7 @@ coding 可选走平台沙箱 exec）全部可用；最近一次全量回归与�
 |---|---|
 | 路径 | `C:\Users\123\Personal Agent` |
 | 分支 | `main`（与 `origin/main` 同步） |
-| 远端 | `git@github.com:seele430/Personal-Agent.git` |
+| 远端 | `git@github.com:seele430/unimere.git` |
 | 运行时 | `.venv\Scripts\python.exe`（Python 3.12） |
 
 ### 启动（开发模式）

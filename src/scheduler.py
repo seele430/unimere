@@ -160,7 +160,7 @@ def main():
     scheduler.start()
 
     logger.info(
-        "Personal Agent Scheduler 已启动"
+        "Unimere Scheduler 已启动"
     )
 
     logger.info(

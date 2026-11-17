@@ -815,14 +815,14 @@ export default function AuthPreview() {
           <div className="pa-auth-brand">
             <div className="pa-auth-brand-icon"><BrandMark size={34} /></div>
             <div>
-              <strong>Personal Agent</strong>
-              <span>LOCAL AI WORKSPACE</span>
+              <strong>Unimere</strong>
+              <span>一泓 · LOCAL AI WORKSPACE</span>
             </div>
           </div>
 
           <div className="pa-auth-hero-content">
-            <div className="pa-auth-hero-label">YOUR PERSONAL AI SPACE</div>
-            <h1>把想法，<br />变成下一步。</h1>
+            <div className="pa-auth-hero-label">MANY FLOWS. ONE CLEAR SPACE.</div>
+            <h1>万流入泓，<br />诸事归一。</h1>
             <p>对话、任务、记忆与产物，<br />都在你的本地工作空间里。</p>
             <div className="pa-auth-proof" aria-label="产品特点">
               <span><ShieldCheck size={16} />数据不出本机</span>
@@ -832,7 +832,7 @@ export default function AuthPreview() {
           </div>
 
           <div className="pa-auth-hero-footer">
-            PERSONAL AGENT · PRIVATE BY DESIGN
+            UNIMERE · PRIVATE BY DESIGN
           </div>
 
           <div
@@ -851,7 +851,7 @@ export default function AuthPreview() {
           <div className="pa-auth-form-container">
 
             <div className="pa-auth-mobile-brand">
-              <BrandMark size={25} /> Personal Agent
+              <BrandMark size={25} /> Unimere｜一泓
             </div>
 
             <div className="pa-auth-eyebrow">
@@ -875,7 +875,7 @@ export default function AuthPreview() {
                 ? '这是第一次启动。创建站长账号后即可进入工作空间。'
                 : resetMode
                   ? '忘记密码时，在这台机器上直接设置新密码。'
-                  : '登录你的 Personal Agent 工作空间'}
+                  : '登录你的 Unimere 工作空间'}
             </p>
 
 

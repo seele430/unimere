@@ -1748,8 +1748,8 @@ export default function App(
         <div className="brand">
           <div className="brand-icon"><BrandMark size={30} /></div>
           <div className="brand-copy">
-            <strong>Personal Agent</strong>
-            <span>LOCAL AI WORKSPACE</span>
+            <strong>Unimere</strong>
+            <span>一泓 · LOCAL AI WORKSPACE</span>
           </div>
           <button
             type="button"
@@ -1839,7 +1839,7 @@ export default function App(
             <ShieldCheck size={17} />
             <div><strong>本地优先</strong><span>数据留在这台设备</span></div>
           </div>
-          {account ?? <div className="version">Personal Agent · Dev</div>}
+          {account ?? <div className="version">Unimere · Dev</div>}
         </div>
       </aside>
 

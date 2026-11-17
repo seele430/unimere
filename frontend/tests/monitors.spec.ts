@@ -98,7 +98,7 @@ async function openTaskCenter(page: Page): Promise<void> {
   ).toBeVisible();
 }
 
-test.describe("Personal Agent Monitors", () => {
+test.describe("Unimere Monitors", () => {
 
   // 1. 列出自己的监控任务
 

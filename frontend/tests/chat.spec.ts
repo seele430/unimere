@@ -83,10 +83,10 @@ async function expectUnconfirmed(page: Page): Promise<void> {
 
 
 // ==========================================
-// Personal Agent 已登录聊天测试
+// Unimere 已登录聊天测试
 // ==========================================
 
-test.describe("Personal Agent Chat", () => {
+test.describe("Unimere Chat", () => {
 
   // 1. 正常聊天及身份信息
   test("正常聊天能够收到回复", async ({ page }) => {

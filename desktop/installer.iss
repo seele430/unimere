@@ -1,4 +1,4 @@
-; Personal Agent 安装包（Inno Setup 6）
+; Unimere 安装包（Inno Setup 6）
 ;
 ; 生成：ISCC.exe desktop\installer.iss
 ; 前提：先跑过 pyinstaller desktop\build.spec，产出 dist\PersonalAgent\
@@ -7,7 +7,7 @@
 ;   - 装到 {localappdata} 而不是 Program Files → 不需要管理员权限；
 ;   - 数据放 %APPDATA%\PersonalAgent（程序自己建），卸载时不删，避免丢聊天记录。
 
-#define AppName "Personal Agent"
+#define AppName "Unimere"
 #define AppVersion "0.1.0"
 #define AppPublisher "seele"
 #define AppExeName "PersonalAgent.exe"

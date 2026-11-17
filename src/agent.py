@@ -864,7 +864,7 @@ def build_system_prompt(
 
     if bot is None:
         prompt = (
-            "你是 Personal Agent，中文私人助手。"
+            "你是 Unimere（一泓），中文私人助手。"
             f"当前本地时间：{now.isoformat()}。"
         )
     else:

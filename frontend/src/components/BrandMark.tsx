@@ -13,14 +13,18 @@ export default function BrandMark({ size = 32, className }: BrandMarkProps) {
       fill="none"
       aria-hidden="true"
     >
-      <path
-        d="M16 3.5v25M3.5 16h25M7.2 7.2l17.6 17.6M24.8 7.2 7.2 24.8"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-      />
-      <circle cx="16" cy="16" r="4.25" fill="currentColor" />
-      <circle cx="16" cy="16" r="1.75" fill="var(--mark-center, #173d35)" />
+      <g stroke="currentColor" strokeLinecap="round">
+        <path
+          d="M7 9.5v6.5c0 6 3.5 9.5 9 9.5s9-3.5 9-9.5V9.5"
+          strokeWidth="2.2"
+        />
+        <path
+          d="M11 11.5v4.5c0 4 2 6 5 6s5-2 5-6v-4.5"
+          strokeWidth="1.6"
+          opacity=".72"
+        />
+      </g>
+      <circle cx="16" cy="16" r="2.6" fill="var(--mark-center, #5db9b4)" />
     </svg>
   );
 }

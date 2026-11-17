@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-  <rect width="48" height="48" rx="13" fill="#153b32"/>
-  <g stroke="#8dd8b6" stroke-width="2.8" stroke-linecap="round">
-    <path d="M24 9v30M9 24h30M13.4 13.4l21.2 21.2M34.6 13.4 13.4 34.6"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Unimere 一泓">
+  <rect width="64" height="64" rx="16" fill="#123f46"/>
+  <g fill="none" stroke="#f3f8f7" stroke-linecap="round">
+    <path d="M15 19v13c0 12 7 19 17 19s17-7 17-19V19" stroke-width="4"/>
+    <path d="M22 23v9c0 8 4 12 10 12s10-4 10-12v-9" stroke-width="3" opacity=".72"/>
   </g>
-  <circle cx="24" cy="24" r="5.5" fill="#8dd8b6"/>
-  <circle cx="24" cy="24" r="2.2" fill="#153b32"/>
+  <circle cx="32" cy="32" r="5" fill="#5db9b4"/>
 </svg>

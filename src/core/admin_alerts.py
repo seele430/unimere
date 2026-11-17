@@ -132,7 +132,7 @@ def build_alert_message(
     title = ALERT_TYPES[issue_type]
 
     return (
-        f"Personal Agent 管理员告警\n"
+        f"Unimere 管理员告警\n"
         f"异常类型：{title}\n"
         f"任务 ID：{task_id}\n"
         f"请到管理员后台查看详细情况。"

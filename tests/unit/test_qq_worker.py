@@ -62,7 +62,7 @@ class TaskWorkerCase(WorkerCase):
 
         self.task_worker().run_once()
 
-        self.assertIn("Personal Agent 在线；QQ 入站已接通。", self.client.sent[0][1])
+        self.assertIn("Unimere（一泓）在线；QQ 入站已接通。", self.client.sent[0][1])
         self.assertEqual(self.outbox.get("1")["state"], "sent")
 
     def test_danger_denied(self):

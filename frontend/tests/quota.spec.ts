@@ -66,7 +66,7 @@ async function login(page: Page): Promise<void> {
   ).toBeVisible();
 }
 
-test.describe("Personal Agent Quota", () => {
+test.describe("Unimere Quota", () => {
 
   // 1. 额度面板展示请求次数与预算
 

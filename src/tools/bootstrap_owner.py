@@ -1,5 +1,5 @@
 
-"""Personal Agent - 安全初始化站长账户。"""
+"""Unimere - 安全初始化站长账户。"""
 
 import ctypes
 import getpass
@@ -169,7 +169,7 @@ def prompt_password_gui(
 
     root = tk.Tk()
 
-    root.title("Personal Agent · 安全初始化")
+    root.title("Unimere · 安全初始化")
     root.geometry("540x510")
     root.resizable(False, False)
     root.configure(bg=BG)
@@ -211,7 +211,7 @@ def prompt_password_gui(
 
     tk.Label(
         outer,
-        text="PERSONAL AGENT",
+        text="UNIMERE · 一泓",
         font=(FONT, 11, "bold"),
         fg=PRIMARY,
         bg=BG,
@@ -564,7 +564,7 @@ def prompt_password_gui(
 
 def main() -> int:
     print("=" * 48)
-    print("Personal Agent - 初始化站长")
+    print("Unimere - 初始化站长")
     print("=" * 48)
 
     print(f"账户数据库：{paths.auth_users_db}")

@@ -166,7 +166,7 @@ export function ChatMessages({
 
               <div className="message-body">
                 <div className="message-name">
-                  {message.role === "assistant" ? "Personal Agent" : "你"}
+                  {message.role === "assistant" ? "一泓" : "你"}
                 </div>
 
                 <div className="message-content">{message.content}</div>
