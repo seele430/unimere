@@ -1,18 +1,15 @@
-"""QQ 入站与 OneBot 客户端测试：全 mock，不联网、不连 NapCat。"""
+"""QQ 入站共享逻辑测试：全 mock，不联网。"""
 
 import hashlib
 import hmac
-import io
-import json
 import unittest
-import urllib.error
 
 from pathlib import Path
 
 from unittest.mock import patch
 
 from src.qq.inbound import QQInbound
-from src.qq.onebot import OneBotClient, OneBotError
+from src.qq.transport import QQTransportError
 
 
 SECRET = "s3cret"
@@ -24,9 +21,9 @@ class FakeClient:
         self.sent = []
         self.fail = False
 
-    def send_private_msg(self, user_id, text):
+    def send_private_msg(self, user_id, text, **kwargs):
         if self.fail:
-            raise OneBotError("boom")
+            raise QQTransportError("boom")
 
         self.sent.append((user_id, text))
 
@@ -184,56 +181,6 @@ class HandleCase(unittest.TestCase):
         handler.handle(event(message="x" * 500))
 
         self.assertLessEqual(len(handler.audit[-1]["summary"]), 80)
-
-
-class OneBotClientCase(unittest.TestCase):
-    def test_missing_config_raises(self):
-        client = OneBotClient(base_url="", token="")
-
-        with self.assertRaises(OneBotError):
-            client.send_private_msg(1, "hi")
-
-    def test_sends_with_bearer_token(self):
-        captured = {}
-
-        class Response(io.BytesIO):
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *args):
-                return False
-
-        def fake_urlopen(request, timeout=None):
-            captured["url"] = request.full_url
-            captured["auth"] = request.headers.get("Authorization")
-            captured["body"] = request.data
-            captured["timeout"] = timeout
-
-            return Response(json.dumps({"status": "ok", "data": {"message_id": 9}}).encode())
-
-        client = OneBotClient(base_url="http://127.0.0.1:3000", token="tok")
-
-        with patch("src.qq.onebot.urllib.request.urlopen", side_effect=fake_urlopen):
-            result = client.send_private_msg(123, "hi")
-
-        self.assertEqual(result, {"message_id": 9})
-        self.assertEqual(captured["url"], "http://127.0.0.1:3000/send_msg")
-        self.assertEqual(captured["auth"], "Bearer tok")
-        self.assertEqual(captured["timeout"], 10.0)
-
-    def test_http_error_becomes_onebot_error(self):
-        client = OneBotClient(base_url="http://127.0.0.1:3000", token="tok")
-
-        with patch(
-            "src.qq.onebot.urllib.request.urlopen",
-            side_effect=urllib.error.HTTPError("u", 401, "no", {}, io.BytesIO(b"")),
-        ):
-            with self.assertRaises(OneBotError) as caught:
-                client.send_private_msg(1, "hi")
-
-        self.assertIn("401", str(caught.exception))
-
-
 
 
 class FakeProvider:

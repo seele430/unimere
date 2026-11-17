@@ -12,7 +12,9 @@
 from __future__ import annotations
 
 import json
+import math
 import os
+import random
 import threading
 import time
 
@@ -22,7 +24,7 @@ from src.qq import router
 from src.qq.collab_continue import ContinueError, continue_run
 from src.qq.inbound import QQInbound, MAX_REPLY_CHARS
 from src.qq.intents import check_contract
-from src.qq.onebot import OneBotError
+from src.qq.transport import QQTransportError
 from src.qq.outbox import QQOutbox
 from src.qq.threads import ThreadStore
 from src.qq.policy import (
@@ -40,7 +42,55 @@ DENY_TEXT = "QQ 端不支持执行命令。"
 UNAVAILABLE_TEXT = "QQ 端暂未开放出图/写文件。"
 CLARIFY_TEXT = "请再说清楚一点：可以问问题，或用 /status、/ask、/cancel。"
 MAX_REPLY_CHUNKS = 3
-REPLY_CHUNK_DELAY = 0.3
+
+DELAY_DEFAULTS = {
+    "chunk": (2.0, 8.0),
+    "caption": (0.8, 2.0),
+    "item": (2.0, 5.0),
+}
+DELAY_ENV_PREFIXES = {
+    "chunk": "PA_QQ_CHUNK_DELAY",
+    "caption": "PA_QQ_CAPTION_DELAY",
+    "item": "PA_QQ_ITEM_DELAY",
+}
+MAX_PACING_DELAY = 30.0
+
+
+def _delay_bounds(kind: str) -> tuple[float, float]:
+    """读取一档停顿配置；任一端非法时，该组整体回退默认值。"""
+
+    kind = kind if kind in DELAY_DEFAULTS else "chunk"
+    default = DELAY_DEFAULTS[kind]
+    prefix = DELAY_ENV_PREFIXES[kind]
+    raw_min = os.getenv(prefix + "_MIN")
+    raw_max = os.getenv(prefix + "_MAX")
+
+    try:
+        minimum = default[0] if raw_min is None else float(raw_min.strip())
+        maximum = default[1] if raw_max is None else float(raw_max.strip())
+    except (AttributeError, ValueError):
+        return default
+
+    valid = (
+        math.isfinite(minimum)
+        and math.isfinite(maximum)
+        and 0 <= minimum <= maximum <= MAX_PACING_DELAY
+    )
+
+    return (minimum, maximum) if valid else default
+
+
+def chunk_pause(kind: str = "chunk") -> float:
+    """按档位随机停顿并返回实际秒数；显式配置 0/0 时不睡眠。"""
+
+    minimum, maximum = _delay_bounds(kind)
+    delay = random.uniform(minimum, maximum)
+
+    if delay > 0:
+        time.sleep(delay)
+
+    return delay
+
 
 # 发送失败只重试一次：救偶发断连，不救 NapCat 进程没了（那种等多久都没用）。
 SEND_RETRIES = 1
@@ -76,6 +126,25 @@ CONTRACT_MESSAGES = {
     "disabled": "该意图未启用。",
     "invalid_params": "参数不合法，已拒绝。",
 }
+
+
+def _fit_reply_budget(chunks: list[str], limit: int) -> list[str]:
+    """把长文本块合并到官方通道的被动回复预算内。
+
+    官方通道 `limit=4`，块数超了就先均分合并，保证
+    「同一条用户消息最多回 4 次」不被撞破。
+    """
+
+    if limit <= 0 or len(chunks) <= limit:
+        return chunks
+
+    size = -(-len(chunks) // limit)  # 向上取整
+    merged: list[str] = []
+
+    for start in range(0, len(chunks), size):
+        merged.append("".join(chunks[start : start + size]))
+
+    return merged[:limit]
 
 
 class BaseWorker:
@@ -135,12 +204,42 @@ class BaseWorker:
 
     # ---------- 发送 ----------
 
+    @staticmethod
+    def _next_msg_seq(job: dict) -> int:
+        """同一入站消息的所有提示与正式回复共用一个递增序号。
+
+        长任务会先发送「生成中」提示；图文、海报和失败回复必须从下一个序号继续，
+        否则官方接口会以 `40054005` 去重。
+        """
+
+        seq = int(job.get("_qq_next_msg_seq") or 1)
+        job["_qq_next_msg_seq"] = seq + 1
+
+        return seq
+
+    def _remaining_replies(self, job: dict) -> int:
+        """返回扣除已发提示后的官方被动回复预算。"""
+
+        maximum = int(getattr(self.client, "max_replies", 0) or 0)
+
+        if maximum <= 0:
+            return 0
+
+        used = int(job.get("_qq_next_msg_seq") or 1) - 1
+
+        return max(1, maximum - used)
+
     def notice(self, job: dict, text: str) -> bool:
         """发送提示，不改变业务状态（确认提示/拒绝说明）。"""
 
         try:
-            self.client.send_private_msg(int(job["sender"]), text)
-        except OneBotError as error:
+            self.client.send_private_msg(
+                int(job["sender"]),
+                text,
+                msg_id=str(job.get("message_id") or ""),
+                msg_seq=self._next_msg_seq(job),
+            )
+        except QQTransportError as error:
             self.handler.record_audit(job, "send-failed", str(error))
 
             return False
@@ -174,21 +273,26 @@ class BaseWorker:
         except Exception:  # noqa: BLE001 - 会话记录失败不影响发送
             pass
 
-    def _send_with_retry(self, job: dict, text: str) -> None:
-        """发一次；失败按预算重试（默认 1 次）。仍失败就抛最后一个 OneBotError。"""
+    def _send_with_retry(self, job: dict, text: str, *, msg_seq: int = 1) -> None:
+        """发一次；失败按预算重试（默认 1 次）。仍失败就抛最后一个 QQTransportError。"""
 
         budget = 0 if (os.getenv("PA_QQ_SEND_RETRY") or "1").strip() == "0" else SEND_RETRIES
-        last: OneBotError | None = None
+        last: QQTransportError | None = None
 
         for attempt in range(budget + 1):
             try:
-                self.client.send_private_msg(int(job["sender"]), text)
+                self.client.send_private_msg(
+                    int(job["sender"]),
+                    text,
+                    msg_id=str(job.get("message_id") or ""),
+                    msg_seq=msg_seq,
+                )
 
                 if attempt:
                     self.handler.record_audit(job, "send-retry", f"attempt={attempt}")
 
                 return
-            except OneBotError as error:
+            except QQTransportError as error:
                 last = error
 
                 if attempt >= budget:
@@ -238,8 +342,8 @@ class BaseWorker:
             return False
 
         try:
-            self._send_with_retry(job, text)
-        except OneBotError as error:
+            self._send_with_retry(job, text, msg_seq=self._next_msg_seq(job))
+        except QQTransportError as error:
             self._fail_send(job, text, error, partial=False)
 
             return False
@@ -250,6 +354,12 @@ class BaseWorker:
 
         return True
 
+    def _pause(self, job: dict, kind: str, index: int) -> None:
+        delay = chunk_pause(kind)
+        self.handler.record_audit(
+            job, "send-pause", f"kind={kind} index={index} seconds={delay:.3f}"
+        )
+
     def reply_many(self, job: dict, texts: list[str]) -> bool:
         """分多条发送（长回答）；只认领一次，全文写进 reply。"""
 
@@ -257,6 +367,8 @@ class BaseWorker:
 
         if not chunks:
             return False
+
+        chunks = _fit_reply_budget(chunks, self._remaining_replies(job))
 
         message_id = job["message_id"]
 
@@ -274,11 +386,11 @@ class BaseWorker:
 
         for index, chunk in enumerate(chunks):
             if index:
-                time.sleep(REPLY_CHUNK_DELAY)
+                self._pause(job, "chunk", index)
 
             try:
-                self._send_with_retry(job, chunk)
-            except OneBotError as error:
+                self._send_with_retry(job, chunk, msg_seq=self._next_msg_seq(job))
+            except QQTransportError as error:
                 self._fail_send(job, "\n".join(chunks), error, partial=index > 0)
 
                 return False
@@ -309,12 +421,15 @@ class BaseWorker:
             return False
 
         try:
-            self.client.send_private_image(int(job["sender"]), image_path)
-
-            if caption:
-                time.sleep(REPLY_CHUNK_DELAY)
-                self.client.send_private_msg(int(job["sender"]), caption)
-        except OneBotError as error:
+            # 官方通道把配文并进同一条图消息，节省一次被动回复额度。
+            self.client.send_private_image(
+                int(job["sender"]),
+                image_path,
+                caption,
+                msg_id=str(message_id),
+                msg_seq=self._next_msg_seq(job),
+            )
+        except QQTransportError as error:
             self.outbox.mark_failed(message_id, error=str(error))
             self.handler.record_audit(job, "send-failed", str(error))
 
@@ -324,6 +439,59 @@ class BaseWorker:
         self.outbox.mark_sent(message_id, reply=summary, state=self.terminal_state)
         self.handler.record_audit(job, "sent")
         self._record_assistant(job, summary)
+
+        return True
+
+    def reply_rich(self, job: dict, items: list[tuple]) -> bool:
+        """一次认领，按序发送图文：("text", 文本) 或 ("image", 图片路径, 配文)。
+
+        每张图片后可紧跟一条配文；全文摘要写进 reply，状态推进与 reply_many 一致。
+        """
+
+        if not items:
+            return False
+
+        message_id = job["message_id"]
+
+        if not self.outbox.claim_send(message_id):
+            current = self.outbox.get(message_id) or {}
+
+            if int(current.get("cancelled") or 0) == 1:
+                self.handler.record_audit(job, "send_skipped_cancelled")
+                self.outbox.mark_cancelled(message_id, error="cancelled before send")
+            else:
+                self.handler.record_audit(job, "send_claim_failed")
+                self.outbox.mark_failed(message_id, error="send claim failed")
+
+            return False
+
+        summaries = [
+            f"[图片] {item[2]}".strip() if item[0] == "image" else item[1]
+            for item in items
+        ]
+        full_text = "\n".join(summaries)
+
+        try:
+            self.client.send_rich_items(
+                int(job["sender"]),
+                items,
+                msg_id=str(message_id),
+                msg_seq=self._next_msg_seq(job),
+                pause=lambda index: self._pause(job, "item", index),
+            )
+        except QQTransportError as error:
+            self._fail_send(
+                job,
+                full_text,
+                error,
+                partial=getattr(error, "sent_count", 0) > 0,
+            )
+
+            return False
+
+        self.outbox.mark_sent(message_id, reply=full_text, state=self.terminal_state)
+        self.handler.record_audit(job, "sent")
+        self._record_assistant(job, full_text)
 
         return True
 
@@ -381,6 +549,9 @@ class TaskWorker(BaseWorker):
 
         if action == "execute" and decision["intent"] == "poster":
             return self._run_poster(job, decision)
+
+        if action == "execute" and decision["intent"] == "guide":
+            return self._run_guide(job, decision)
 
         if action == "deny":
             self.outbox.set_routing(
@@ -482,13 +653,13 @@ class TaskWorker(BaseWorker):
             try:
                 from src.sessions import SessionStore
 
-                rows = SessionStore().list(limit=10)
+                rows = SessionStore().list(limit=10, source="qq")
                 lines = [
                     f"{row['id'][:8]} · {row['title'] or row['source']} · "
                     f"{time.strftime('%m-%d %H:%M', time.localtime(row['updated_at']))}"
                     for row in rows
                 ]
-                text = "最近会话：\n" + ("\n".join(lines) if lines else "（暂无）")
+                text = "最近 QQ 会话：\n" + ("\n".join(lines) if lines else "（暂无）")
             except Exception as error:  # noqa: BLE001
                 text = f"读取会话失败：{error}"
         elif decision["intent"] == "use_session":
@@ -498,7 +669,9 @@ class TaskWorker(BaseWorker):
                 from src.sessions import SessionError, SessionStore
 
                 store = SessionStore()
-                matches = store.find_by_prefix(decision["params"]["prefix"])
+                matches = store.find_by_prefix(
+                    decision["params"]["prefix"], source="qq"
+                )
 
                 if not matches:
                     text = "没找到匹配的会话。"
@@ -635,6 +808,31 @@ class TaskWorker(BaseWorker):
 
         return True
 
+    def _poster_context(self, job: dict) -> str:
+        """取当前会话最近几条消息，供「主题空泛」时补全；失败退回空串。"""
+
+        try:
+            from src.sessions import SessionStore
+
+            store = SessionStore()
+            sender = int(job.get("sender") or 0)
+            session = store.active_session(sender)
+
+            if session is None or session.get("deleted"):
+                return ""
+
+            return (
+                store.context(
+                    session["id"],
+                    max_messages=6,
+                    max_chars=1200,
+                    exclude_message_id=str(job.get("message_id") or ""),
+                )
+                or ""
+            )
+        except Exception:  # noqa: BLE001 - 上下文失败不影响出图
+            return ""
+
     def _run_poster(self, job: dict, decision: dict) -> bool:
         message_id = job["message_id"]
         params = decision["params"]
@@ -646,6 +844,8 @@ class TaskWorker(BaseWorker):
         )
         self.notice(job, "海报生成中，约需 30-60 秒。")
 
+        context = self._poster_context(job)
+
         try:
             from src.collab.providers import build_provider, provider_name
             from src.qq.poster import PosterError, make_poster
@@ -654,13 +854,18 @@ class TaskWorker(BaseWorker):
                 raise PosterError("QQ 端不支持 agent 模式出图（会改动文件）")
 
             png_path = make_poster(
-                params["topic"], message_id, provider=build_provider()
+                params["topic"],
+                message_id,
+                provider=build_provider(),
+                context=context,
             )
         except PosterError as error:
             self.reply(job, f"海报生成失败：{error}")
             self.handler.record_audit(job, "poster_failed", str(error)[:200])
 
             return True
+
+        self.handler.record_audit(job, "poster_context", f"chars={len(context)}")
 
         self.reply_image(
             job,
@@ -670,6 +875,67 @@ class TaskWorker(BaseWorker):
         self.handler.record_audit(job, "poster_sent", str(png_path))
 
         return True
+
+    def _run_guide(self, job: dict, decision: dict) -> bool:
+        message_id = job["message_id"]
+        params = decision["params"]
+
+        self.outbox.set_routing(
+            message_id, intent="guide", params=params,
+            params_hash=params_hash(params), decision_source=decision["source"],
+            state="running", policy_decision="allow",
+        )
+        self.notice(job, "图文长图生成中，可能需要 1-2 分钟。")
+
+        try:
+            from src.collab.providers import build_provider, provider_name
+            from src.qq.guide import GuideError, make_guide
+
+            if provider_name() == "qwen-agent":
+                raise GuideError("QQ 端不支持 agent 模式出图（会改动文件）")
+
+            summary, items = make_guide(
+                params["topic"],
+                message_id,
+                provider=build_provider(),
+                context=self._guide_context(job),
+            )
+        except GuideError as error:
+            self.reply(job, f"图文生成失败：{error}")
+            self.handler.record_audit(job, "guide_failed", str(error)[:200])
+
+            return True
+
+        rich = [("text", summary)] + [
+            ("image", str(path), caption) for path, caption in items
+        ]
+        self.reply_rich(job, rich)
+        self.handler.record_audit(job, "guide_sent", f"pages={len(items)}")
+
+        return True
+
+    @staticmethod
+    def _guide_context(job: dict) -> str:
+        """取最近会话历史帮助识别图文主题；失败时返回空串，不阻塞出图。"""
+
+        try:
+            from src.sessions import SessionStore
+
+            store = SessionStore()
+            sender = int(job.get("sender") or 0)
+            session = store.active_session(sender)
+
+            if session is None or session.get("deleted"):
+                return ""
+
+            return store.context(
+                session["id"],
+                max_messages=6,
+                max_chars=1500,
+                exclude_message_id=str(job.get("message_id") or ""),
+            )
+        except Exception:  # noqa: BLE001 - 上下文失败时仅按当前需求出图
+            return ""
 
     def _run_continue(self, job: dict, decision: dict) -> bool:
         message_id = job["message_id"]

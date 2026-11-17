@@ -20,6 +20,12 @@ verify_qwen_agent 脚本。
 `src/collab/orchestrator.py` 的 call_qwen 路线，两代并存易误导。
 最后可用 commit：`50f1ab8`。
 
+## qq-onebot/（2026-11-14 归档）
+
+NapCat / OneBot 小号通道：旧客户端、上线看门狗及对应测试。
+主代码已统一为 QQ 官方机器人。归档原因、最后可用 commit 与恢复步骤见
+`qq-onebot/README.md`；回滚锚点为 `qq-onebot-final`。
+
 ## collab-v1.4/（2026-11-13 归档）
 
 「跨 Agent 协作 v1.4」接口层：capability / guard / verify / registry /

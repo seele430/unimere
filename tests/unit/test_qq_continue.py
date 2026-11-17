@@ -133,7 +133,7 @@ class ContinueCase(unittest.TestCase):
         from src.qq.inbound import QQInbound
 
         class FakeClient:
-            def send_private_msg(self, user_id, text):
+            def send_private_msg(self, user_id, text, **kwargs):
                 return {"message_id": 1}
 
         handler = QQInbound(owner_id=7, secret="s", client=FakeClient(), enabled=True)

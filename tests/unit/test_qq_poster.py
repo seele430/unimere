@@ -9,7 +9,6 @@ from unittest.mock import patch
 from src.qq import router
 from src.qq.inbound import QQInbound
 from src.qq.intents import check_contract, get_spec
-from src.qq.onebot import OneBotClient, OneBotError
 from src.qq.outbox import QQOutbox
 from src.qq.poster import (
     PosterError,
@@ -58,43 +57,19 @@ class PosterContractCase(unittest.TestCase):
         self.assertEqual(error, "invalid_params")
 
 
-class OneBotImageCase(unittest.TestCase):
-    def test_missing_file(self):
-        client = OneBotClient(base_url="http://127.0.0.1:3001", token="t")
-
-        with self.assertRaises(OneBotError):
-            client.send_private_image(7, "no-such-file.png")
-
-    def test_payload(self):
-        client = OneBotClient(base_url="http://127.0.0.1:3001", token="t")
-        calls = []
-        client._call = lambda action, payload=None: calls.append((action, payload)) or {}
-
-        with tempfile.TemporaryDirectory() as temporary:
-            png = Path(temporary) / "p.png"
-            png.write_bytes(b"\x89PNG")
-            client.send_private_image(7, str(png))
-
-        action, payload = calls[0]
-        self.assertEqual(action, "send_msg")
-        self.assertEqual(payload["message_type"], "private")
-        self.assertEqual(payload["user_id"], 7)
-        segment = payload["message"][0]
-        self.assertEqual(segment["type"], "image")
-        self.assertTrue(segment["data"]["file"].startswith("file:///"))
-
-
 class FakeProvider:
     configured = True
 
     def __init__(self, html="<html><body>海报</body></html>", error=None):
         self.html = html
         self.error = error
+        self.prompts = []
 
     def submit(self, prompt, *, artifact_name, out_dir):
         if self.error:
             raise RuntimeError(self.error)
 
+        self.prompts.append(prompt)
         target = Path(out_dir) / artifact_name
         target.write_text(self.html, encoding="utf-8")
 
@@ -122,6 +97,34 @@ class MakePosterCase(unittest.TestCase):
         self.assertIn("构成/占比/份额类数据", prompt)
         self.assertIn("conic-gradient", prompt)
         self.assertIn("用户指定了图表类型时必须遵从", prompt)
+
+    def test_prompt_carries_context_and_no_fabrication_rule(self):
+        prompt = build_poster_prompt(
+            "我很想要海报",
+            "用户：查一下上海近三天的天气\n助手：上海近三天阴有小雨……",
+        )
+
+        self.assertIn("我很想要海报", prompt)
+        self.assertIn("最近对话", prompt)
+        self.assertIn("上海近三天的天气", prompt)
+        self.assertIn("严禁自行编造", prompt)
+
+    def test_make_poster_forwards_context(self):
+        provider = FakeProvider()
+
+        def fake_renderer(html_path, png_path):
+            Path(png_path).write_bytes(b"\x89PNG")
+
+            return Path(png_path)
+
+        make_poster(
+            "我很想要海报", "m6",
+            provider=provider, root=self.root, renderer=fake_renderer,
+            context="用户：查一下上海近三天的天气",
+        )
+
+        self.assertTrue(provider.prompts)
+        self.assertIn("上海近三天的天气", provider.prompts[0])
 
     def test_happy_path(self):
         def fake_renderer(html_path, png_path):
@@ -217,13 +220,17 @@ class FakeClient:
         self.sent = []
         self.images = []
 
-    def send_private_msg(self, user_id, text):
+    def send_private_msg(self, user_id, text, **kwargs):
         self.sent.append((user_id, text))
 
         return {"message_id": 1}
 
-    def send_private_image(self, user_id, file_path):
+    def send_private_image(self, user_id, file_path, caption='', **kwargs):
         self.images.append((user_id, file_path))
+
+        if caption:
+            # 改造后配文随图片一起下发（官方通道合并成一条），这里同样记进 sent。
+            self.sent.append((user_id, caption))
 
         return {"message_id": 2}
 
@@ -236,6 +243,9 @@ class WorkerPosterCase(unittest.TestCase):
         self.outbox = QQOutbox(self.root / "outbox.db")
         self.client = FakeClient()
         self.handler = QQInbound(owner_id=7, secret="s", client=self.client, enabled=True)
+        self._pacing = patch("src.qq.worker.chunk_pause", return_value=0.0)
+        self._pacing.start()
+        self.addCleanup(self._pacing.stop)
         self.outbox.enqueue(
             message_id="1", sender=7, raw_text="北京工资海报", queue="task"
         )
@@ -259,6 +269,27 @@ class WorkerPosterCase(unittest.TestCase):
         self.assertTrue(any("口径" in text for _, text in self.client.sent))
         self.assertEqual(self.outbox.get("1")["state"], "sent")
         self.assertEqual(self.outbox.get("1")["intent"], "poster")
+
+    def test_poster_uses_session_context(self):
+        png = self.root / "p2.png"
+        png.write_bytes(b"\x89PNG")
+
+        class FakeStore:
+            def active_session(self, sender):
+                return {"id": "s1"}
+
+            def context(self, session_id, **kwargs):
+                return "用户：查一下上海近三天的天气"
+
+        with patch("src.sessions.SessionStore", return_value=FakeStore()), patch(
+            "src.collab.providers.provider_name", return_value="ark"
+        ), patch("src.qq.poster.make_poster", return_value=png) as maker:
+            self.worker().run_once()
+
+        self.assertEqual(
+            maker.call_args.kwargs.get("context"),
+            "用户：查一下上海近三天的天气",
+        )
 
     def test_poster_failure_replies_text(self):
         with patch(

@@ -82,6 +82,12 @@ class PosterParams(BaseModel):
     topic: str = Field(min_length=2, max_length=500)
 
 
+class GuideParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    topic: str = Field(min_length=2, max_length=500)
+
+
 @dataclass(frozen=True)
 class IntentSpec:
     name: str
@@ -253,6 +259,18 @@ POSTER_SPEC = IntentSpec(
     enabled=True,
 )
 
+GUIDE_SPEC = IntentSpec(
+    name="guide",
+    params_schema=GuideParams,
+    risk="low",
+    policy="allow",
+    handler="guide",
+    timeout_seconds=300.0,
+    retry_policy="none",
+    output_kind="image",
+    enabled=True,
+)
+
 
 INTENT_REGISTRY: dict[str, IntentSpec] = {
     spec.name: spec
@@ -270,6 +288,7 @@ INTENT_REGISTRY: dict[str, IntentSpec] = {
         USE_SESSION_SPEC,
         NEW_SESSION_SPEC,
         POSTER_SPEC,
+        GUIDE_SPEC,
     )
 }
 

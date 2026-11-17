@@ -1,47 +1,29 @@
-"""QQ 通知发送：复用既有 OneBotClient，只允许本机 loopback。
+"""QQ 通知发送：使用官方机器人，仅发给白名单 owner。
 
 边界：
-- 只允许站长私聊，不支持群/多收件人；
+- 只支持 owner 单聊，不支持群/多收件人；
 - 正文截断 1000 个 Unicode 字符；
-- 配置错误抛 ValueError（永久失败），网络/OneBot 错误抛 OneBotError（可重试）；
-- token 不写日志或异常。
+- 配置错误抛 ValueError（永久失败），官方接口错误抛 OfficialError（可重试）；
+- AppSecret 不写日志或异常；主动消息不带 msg_id，受官方主动消息限额。
 """
 
 from __future__ import annotations
 
 import os
 
-from urllib.parse import urlsplit
-
-from src.qq.onebot import OneBotClient, OneBotError
+from src.qq.official import OfficialBotClient, OfficialError
 
 
 MAX_CHARS = 1000
-LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
-def _qq_owner() -> int:
-    raw = (os.getenv("PA_QQ_OWNER") or "").strip()
+def _qq_owner() -> str:
+    owner = (os.getenv("PA_QQ_OWNER_OPENID") or "").strip()
 
-    if not raw.isdigit() or int(raw) <= 0:
-        raise ValueError("PA_QQ_OWNER 必须是正整数")
+    if not owner:
+        raise ValueError("PA_QQ_OWNER_OPENID 未配置")
 
-    return int(raw)
-
-
-def _base_url() -> str:
-    raw = (os.getenv("PA_ONEBOT_URL") or "").strip()
-    parts = urlsplit(raw)
-
-    if (
-        parts.scheme not in ("http", "https")
-        or parts.hostname not in LOOPBACK_HOSTS
-        or parts.username is not None
-        or parts.password is not None
-    ):
-        raise ValueError("PA_ONEBOT_URL 必须是本机 loopback 地址")
-
-    return raw.rstrip("/")
+    return owner
 
 
 def send_qq_notification(message, *, client=None) -> None:
@@ -54,11 +36,15 @@ def send_qq_notification(message, *, client=None) -> None:
     owner = _qq_owner()
 
     if client is None:
-        token = (os.getenv("PA_ONEBOT_TOKEN") or "").strip()
+        app_id = (os.getenv("PA_QQ_APP_ID") or "").strip()
+        app_secret = (os.getenv("PA_QQ_APP_SECRET") or "").strip()
 
-        if not token:
-            raise ValueError("PA_ONEBOT_TOKEN 未配置")
+        if not app_id or not app_secret:
+            raise ValueError("PA_QQ_APP_ID / PA_QQ_APP_SECRET 未配置")
 
-        client = OneBotClient(base_url=_base_url(), token=token)
+        client = OfficialBotClient(
+            app_id=app_id, app_secret=app_secret, owner_openid=owner
+        )
 
+    # 主动通知没有可回复的入站消息，因此不带 msg_id。
     client.send_private_msg(owner, text)

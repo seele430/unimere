@@ -169,5 +169,40 @@ class ClassifyCase(unittest.TestCase):
         self.assertEqual(result["reason"], "continue_usage")
 
 
+    def test_chart_words_route_to_poster(self):
+        for text in (
+            "北京三年的人均年薪统计图",
+            "画个柱状图对比一下",
+            "用折线图看趋势",
+            "做一个饼图",
+            "把数据可视化",
+        ):
+            with self.subTest(text=text):
+                result = classify(text)
+                self.assertEqual(result["intent"], "poster")
+                self.assertEqual(result["action"], "execute")
+                self.assertEqual(result["params"]["topic"], text)
+
+    def test_map_and_picture_keep_ask(self):
+        for text in ("帮我看下地图怎么走", "这张图片清楚吗", "图呢"):
+            with self.subTest(text=text):
+                result = classify(text)
+                self.assertEqual(result["intent"], "ask")
+                self.assertEqual(result["action"], "execute")
+
+
+    def test_compound_chart_suffix_routes_to_poster(self):
+        for text in (
+            "各级产业在2025年gdp占比图",
+            "做一个产业结构图",
+            "人口分布图",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(classify(text)["intent"], "poster")
+
+    def test_compare_two_images_stays_ask(self):
+        self.assertEqual(classify("对比一下这两张图")["intent"], "ask")
+
+
 if __name__ == "__main__":
     unittest.main()

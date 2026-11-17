@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from tests.helper import build_temp_paths, isolated_paths
 from src.core import outbox_worker
-from src.qq.onebot import OneBotError
+from src.qq.transport import QQTransportError
 
 
 class OutboxQqCase(unittest.TestCase):
@@ -84,14 +84,14 @@ class OutboxQqCase(unittest.TestCase):
             qq_send.assert_not_called()
             ntfy_send.assert_not_called()
 
-    def test_onebot_error_retries(self):
+    def test_transport_error_retries(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = self.make_db(temp_dir)
 
             with isolated_paths(temp_dir), patch.object(outbox_worker, "init_task_db"), patch.object(
                 outbox_worker, "channel_for_owner", return_value="qq"
             ), patch.object(
-                outbox_worker, "send_qq_notification", side_effect=OneBotError("down")
+                outbox_worker, "send_qq_notification", side_effect=QQTransportError("down")
             ):
                 result = outbox_worker.process_one_notification()
 
@@ -109,7 +109,7 @@ class OutboxQqCase(unittest.TestCase):
             with isolated_paths(temp_dir), patch.object(outbox_worker, "init_task_db"), patch.object(
                 outbox_worker, "channel_for_owner", return_value="qq"
             ), patch.object(
-                outbox_worker, "send_qq_notification", side_effect=OneBotError("down")
+                outbox_worker, "send_qq_notification", side_effect=QQTransportError("down")
             ):
                 outbox_worker.process_one_notification()
 
@@ -144,7 +144,7 @@ class OutboxQqCase(unittest.TestCase):
             with isolated_paths(temp_dir), patch.object(outbox_worker, "init_task_db"), patch.object(
                 outbox_worker, "channel_for_owner", return_value="qq"
             ), patch.object(
-                outbox_worker, "send_qq_notification", side_effect=OneBotError("down")
+                outbox_worker, "send_qq_notification", side_effect=QQTransportError("down")
             ):
                 outbox_worker.process_one_notification()
 

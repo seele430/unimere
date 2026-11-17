@@ -13,11 +13,13 @@ import json
 import urllib.error
 import urllib.request
 
+from src.qq.transport import QQTransportError
+
 
 DEFAULT_TIMEOUT = 10.0
 
 
-class OneBotError(RuntimeError):
+class OneBotError(QQTransportError):
     """OneBot 调用失败。"""
 
 
@@ -100,7 +102,14 @@ class OneBotClient:
 
         return body.get("data") or {}
 
-    def send_private_msg(self, user_id: int, text: str) -> dict:
+    def send_private_msg(
+        self,
+        user_id: int,
+        text: str,
+        *,
+        msg_id: str = "",
+        msg_seq: int = 1,
+    ) -> dict:
         if not str(text or "").strip():
             raise OneBotError("消息内容不能为空")
 
@@ -115,8 +124,19 @@ class OneBotClient:
             },
         )
 
-    def send_private_image(self, user_id: int, file_path: str) -> dict:
-        """发本地图片：file:// URI 由 NapCat 在本机读取，不走网络上传。"""
+    def send_private_image(
+        self,
+        user_id: int,
+        file_path: str,
+        caption: str = "",
+        *,
+        msg_id: str = "",
+        msg_seq: int = 1,
+    ) -> dict:
+        """发本地图片：file:// URI 由 NapCat 在本机读取，不走网络上传。
+
+        OneBot 没有「图文混排」概念：配文必须单独发一条，行为与改造前一致。
+        """
 
         from pathlib import Path
 
@@ -125,7 +145,7 @@ class OneBotClient:
         if not path.is_file():
             raise OneBotError(f"图片文件不存在：{path.name}")
 
-        return self._call(
+        result = self._call(
             "send_msg",
             {
                 "message_type": "private",
@@ -135,6 +155,49 @@ class OneBotClient:
                 ],
             },
         )
+
+        if str(caption or "").strip():
+            self.send_private_msg(user_id, caption, msg_id=msg_id, msg_seq=msg_seq + 1)
+
+        return result
+
+    def send_rich_items(
+        self,
+        user_id: int,
+        items,
+        *,
+        msg_id: str = "",
+        msg_seq: int = 1,
+        pause=None,
+    ) -> None:
+        """逐条发送（OneBot 不支持图文混排），条数不设上限。"""
+
+        sent = 0
+
+        for offset, item in enumerate(list(items or [])):
+            if offset and pause is not None:
+                pause(offset)
+
+            try:
+                if str(item[0]) == "image":
+                    caption = str(item[2]) if len(item) > 2 else ""
+                    self.send_private_image(
+                        user_id,
+                        item[1],
+                        caption,
+                        msg_id=msg_id,
+                        msg_seq=msg_seq + offset,
+                    )
+                else:
+                    self.send_private_msg(
+                        user_id, str(item[1]), msg_id=msg_id, msg_seq=msg_seq + offset
+                    )
+            except QQTransportError as error:
+                error.sent_count = sent
+
+                raise
+
+            sent += 1
 
     def get_login_info(self) -> dict:
         return self._call("get_login_info")

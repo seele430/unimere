@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from src.qq.inbound import QQInbound
-from src.qq.onebot import OneBotError
+from src.qq.transport import QQTransportError
 from src.qq.outbox import QQOutbox
 from src.qq.worker import TaskWorker
 from src.sessions import SessionStore
@@ -22,14 +22,14 @@ class ScriptedClient:
         self.calls: list[str] = []
         self.sent: list[str] = []
 
-    def send_private_msg(self, user_id, text):
+    def send_private_msg(self, user_id, text, **kwargs):
         self.calls.append(text)
         remaining = int(self.fail_on.get(text) or 0)
 
         if remaining:
             self.fail_on[text] = remaining - 1
 
-            raise OneBotError("Remote end closed connection without response")
+            raise QQTransportError("Remote end closed connection without response")
 
         self.sent.append(text)
 
@@ -51,6 +51,9 @@ class SendRetryCase(unittest.TestCase):
         self._delay = patch("src.qq.worker.SEND_RETRY_DELAY", 0)
         self._delay.start()
         self.addCleanup(self._delay.stop)
+        self._pacing = patch("src.qq.worker.chunk_pause", return_value=0.0)
+        self._pacing.start()
+        self.addCleanup(self._pacing.stop)
 
         self.outbox = QQOutbox(self.root / "outbox.db")
         self.sessions = SessionStore(self.root / "sessions.db")
@@ -166,7 +169,7 @@ class SendRetryCase(unittest.TestCase):
         outbox = self.outbox
 
         class CancellingClient(ScriptedClient):
-            def send_private_msg(self, user_id, text):
+            def send_private_msg(self, user_id, text, **kwargs):
                 self.calls.append(text)
 
                 with outbox._session() as connection:
@@ -175,7 +178,7 @@ class SendRetryCase(unittest.TestCase):
                         ("m-1",),
                     )
 
-                raise OneBotError("boom")
+                raise QQTransportError("boom")
 
         client = CancellingClient()
 

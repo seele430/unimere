@@ -17,7 +17,7 @@ class FakeClient:
     def __init__(self):
         self.sent = []
 
-    def send_private_msg(self, user_id, text):
+    def send_private_msg(self, user_id, text, **kwargs):
         self.sent.append((user_id, text))
 
         return {"message_id": 1}
@@ -207,6 +207,26 @@ class WorkerContextCase(unittest.TestCase):
                 ).run_once()
 
         self.assertIsNotNone(self.store.active_session(7))
+
+    def test_official_inbound_records_user_message_idempotently(self):
+        from src.qq import api as qq_api
+
+        with patch.object(
+            qq_api, "configured_workers", return_value=(self.outbox, None, None)
+        ):
+            self.assertTrue(qq_api.enqueue_inbound(
+                sender=7, message_id="m-inbound", text="QQ 新消息"
+            ))
+            self.assertFalse(qq_api.enqueue_inbound(
+                sender=7, message_id="m-inbound", text="QQ 新消息"
+            ))
+
+        session = self.store.active_session(7)
+        rows = self.store.messages(session["id"])
+        self.assertEqual(
+            [(row["role"], row["content"]) for row in rows],
+            [("user", "QQ 新消息")],
+        )
 
     def test_two_asks_record_two_assistant_messages(self):
         """assistant 落库不能只留第一条（唯一键撞空 message_id 会静默丢弃）。"""

@@ -51,6 +51,43 @@ POSTER_PATTERNS = (
     r"长图",
     r"信息图",
     r"一图读懂",
+    # 2026-11-15：数据图/统计图类请求也走 poster（poster.py 已支持纯 CSS 柱/折/饼）。
+    # 只收明确图种名词，不收单字「图」——否则「地图/图片」会被误判。
+    r"统计图",
+    r"柱状图",
+    r"条形图",
+    r"折线图",
+    r"饼图",
+    r"环形图",
+    r"散点图",
+    r"趋势图",
+    r"对比图",
+    r"数据图",
+    r"可视化",
+    r"图表",
+    # 复合图种：覆盖「占比图 / 构成图 / 分布图」这类说法；
+    # 不用「维度词+.{0,6}图」的宽正则，避免「对比一下这两张图」被误判。
+    r"占比图",
+    r"构成图",
+    r"分布图",
+    r"结构图",
+    r"比例图",
+    r"走势图",
+    r"份额图",
+    r"增长图",
+    r"变化图",
+    r"排名图",
+    r"分类图",
+    r"产业图",
+    r"行业图",
+    r"人口图",
+    r"销量图",
+)
+
+# 图文长图：攻略/方案等「图文结合、配图」需求 → guide（多页长图管线）
+GUIDE_PATTERNS = (
+    r"图文",
+    r"配图",
 )
 
 # 会切换当前会话的命令：不是对话内容，不该写进 session_messages。
@@ -126,6 +163,9 @@ def classify(text: str) -> dict:
         if not question:
             return _result("unknown", {}, "clarify", "ask_without_question", "command")
 
+        if any(re.search(pattern, question) for pattern in GUIDE_PATTERNS):
+            return _result("guide", {"topic": question}, "execute", "guide", "command")
+
         return _result("ask", {"question": question}, "execute", "ask", "command")
 
     if message.startswith("/task"):
@@ -170,6 +210,9 @@ def classify(text: str) -> dict:
 
     if _poster(message):
         return _result("poster", {"topic": message}, "execute", "poster", "rule")
+
+    if any(re.search(pattern, message) for pattern in GUIDE_PATTERNS):
+        return _result("guide", {"topic": message}, "execute", "guide", "rule")
 
     if _read_intent(message):
         path = _path_of(message)

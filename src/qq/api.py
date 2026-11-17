@@ -1,34 +1,32 @@
-"""QQ 入站 HTTP 端点：NapCat（OneBot 11）→ 入队 → 立即 204。
-
-入站只做四件事：验签、白名单、幂等、选队列。
-完整路由在 task Worker；确认/取消在 control Worker。
-
-双通道教训：上报响应不能带 `reply`，所有完成分支统一 204 空正文。
-"""
+"""QQ 官方单聊入站：白名单校验、幂等入队与网关生命周期。"""
 
 from __future__ import annotations
 
-import json
+import logging
 import os
 
 from pathlib import Path
 
-from fastapi import APIRouter, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter
 
 from src.qq import router as qq_router
+from src.qq.gateway import OfficialGateway
 from src.qq.inbound import QQInbound
-from src.qq.onebot import OneBotClient
+from src.qq.official import OfficialBotClient
 from src.qq.outbox import QQOutbox
+from src.qq.transport import official_uid
 from src.qq.worker import build_workers
 
 
 router = APIRouter(tags=["qq"])
 
+_log = logging.getLogger(__name__)
+
 _inbound: QQInbound | None = None
 _outbox: QQOutbox | None = None
 _task_worker = None
 _control_worker = None
+_gateway: OfficialGateway | None = None
 
 
 def data_root() -> Path:
@@ -38,10 +36,13 @@ def data_root() -> Path:
     )
 
 
-def build_client() -> OneBotClient:
-    return OneBotClient(
-        base_url=os.getenv("PA_ONEBOT_URL") or "",
-        token=os.getenv("PA_ONEBOT_TOKEN") or "",
+def build_client():
+    """构造唯一的 QQ 官方机器人客户端。"""
+
+    return OfficialBotClient(
+        app_id=os.getenv("PA_QQ_APP_ID") or "",
+        app_secret=os.getenv("PA_QQ_APP_SECRET") or "",
+        owner_openid=os.getenv("PA_QQ_OWNER_OPENID") or "",
     )
 
 
@@ -74,13 +75,6 @@ def configured_workers():
         )
         _task_worker.start()
         _control_worker.start()
-
-        try:
-            from src.qq import launch_watcher
-
-            launch_watcher.start()
-        except Exception:  # noqa: BLE001 - 检测线程起不来不影响入站
-            pass
 
     return _outbox, _task_worker, _control_worker
 
@@ -121,55 +115,15 @@ def is_conversation(text: str) -> bool:
     return intent not in qq_router.SESSION_SWITCH_INTENTS
 
 
-@router.post("/api/qq/onebot")
-async def onebot_event(request: Request):
-    body = await request.body()
-    handler = configured_inbound()
-
-    if not handler.enabled:
-        return Response(status_code=204)
-
-    if not handler.verify(body, request.headers.get("X-Signature", "")):
-        return JSONResponse(status_code=401, content={"error": "bad signature"})
-
-    try:
-        event = json.loads(body.decode("utf-8"))
-
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        return JSONResponse(status_code=400, content={"error": "bad json"})
-
-    if event.get("post_type") == "meta_event":
-        handler.handle_meta(event)
-
-        return Response(status_code=204)
-
-    if event.get("post_type") != "message" or event.get("message_type") != "private":
-        return Response(status_code=204)
-
-    sender = int((event.get("sender") or {}).get("user_id") or event.get("user_id") or 0)
-
-    if sender != handler.owner_id:
-        handler.record(event, "dropped:not-owner")
-
-        return Response(status_code=204)
-
-    message_id = str(event.get("message_id") or "")
-    text = handler._text_of(event).strip()
-
-    if not message_id or not text:
-        return Response(status_code=204)
+def enqueue_inbound(*, sender: int, message_id: str, text: str) -> bool:
+    """官方入站写 outbox（主键幂等）并记录会话消息。"""
 
     outbox, _, _ = configured_workers()
     enqueued = outbox.enqueue(
         message_id=message_id,
-        sender=sender,
+        sender=int(sender),
         raw_text=text,
         queue=queue_for(text),
-    )
-
-    handler.record(
-        event,
-        "enqueued" if enqueued else "duplicate_ignored",
     )
 
     if enqueued and is_conversation(text):
@@ -177,9 +131,76 @@ async def onebot_event(request: Request):
             from src.sessions import SessionStore
 
             store = SessionStore()
-            session = store.ensure_active(sender)
+            session = store.ensure_active(int(sender))
             store.add_message(session["id"], "user", text, message_id=message_id)
         except Exception:  # noqa: BLE001 - 会话记录失败不影响入站
             pass
 
-    return Response(status_code=204)
+    return enqueued
+
+
+# ==========================================
+# 官方机器人通道（WebSocket 网关）
+# ==========================================
+
+
+def handle_official_message(openid: str, message_id: str, text: str) -> None:
+    """网关收到 C2C 单聊 → 白名单 → 幂等入队。"""
+
+    handler = configured_inbound()
+
+    if not handler.enabled:
+        return
+
+    owner_openid = (os.getenv("PA_QQ_OWNER_OPENID") or "").strip()
+
+    if not owner_openid:
+        _log.warning(
+            "QQ 官方：未配置 PA_QQ_OWNER_OPENID，消息已丢弃；收到 openid=%s", openid
+        )
+
+        return
+
+    sender = official_uid(openid)
+
+    if sender != official_uid(owner_openid):
+        _log.warning("QQ 官方：非白名单 openid 消息已丢弃（sender=%s）", sender)
+
+        return
+
+    if not enqueue_inbound(sender=sender, message_id=message_id, text=text):
+        _log.info("QQ 官方：重复消息已忽略 %s", message_id)
+
+
+def start_official_gateway() -> bool:
+    """凭证齐备时启动官方网关；重复调用无副作用。"""
+
+    global _gateway
+
+    if _gateway is not None:
+        return False
+
+    handler = configured_inbound()
+    client = handler.client
+
+    if not getattr(client, "configured", False):
+        _log.warning("QQ 官方：缺少 PA_QQ_APP_ID / PA_QQ_APP_SECRET，网关未启动")
+
+        return False
+
+    _gateway = OfficialGateway(client=client, on_message=handle_official_message)
+
+    if _gateway.start():
+        _log.info("QQ 官方网关已启动（出站长连）")
+
+        return True
+
+    return False
+
+
+def stop_official_gateway() -> None:
+    global _gateway
+
+    if _gateway is not None:
+        _gateway.stop()
+        _gateway = None

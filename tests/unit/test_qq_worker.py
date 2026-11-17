@@ -15,7 +15,7 @@ class FakeClient:
     def __init__(self):
         self.sent = []
 
-    def send_private_msg(self, user_id, text):
+    def send_private_msg(self, user_id, text, **kwargs):
         self.sent.append((user_id, text))
 
         return {"message_id": 1}
@@ -29,6 +29,9 @@ class WorkerCase(unittest.TestCase):
         self.outbox = QQOutbox(self.root / "outbox.db")
         self.client = FakeClient()
         self.handler = QQInbound(owner_id=7, secret="s", client=self.client, enabled=True)
+        self._pacing = patch("src.qq.worker.chunk_pause", return_value=0.0)
+        self._pacing.start()
+        self.addCleanup(self._pacing.stop)
 
     def enqueue(self, text, queue="task", message_id="1"):
         self.outbox.enqueue(message_id=message_id, sender=7, raw_text=text, queue=queue)
@@ -167,12 +170,19 @@ class TaskWorkerCase(WorkerCase):
         self.assertEqual(created["task"], "做一个扫雷")
 
     def test_sessions_list_command(self):
+        from src.sessions import SessionStore
+
         with patch.dict("os.environ", {"PERSONAL_AGENT_DATA_DIR": str(self.root)}):
+            store = SessionStore()
+            store.create("web", "网页私有会话")
+            store.create("qq", "QQ 记录")
             self.enqueue("/sessions")
             self.pending("1", intent="sessions")
             self.task_worker().run_once()
 
-        self.assertIn("最近会话", self.client.sent[0][1])
+        self.assertIn("最近 QQ 会话", self.client.sent[0][1])
+        self.assertIn("QQ 记录", self.client.sent[0][1])
+        self.assertNotIn("网页私有会话", self.client.sent[0][1])
 
     def test_use_session_command(self):
         from src.sessions import SessionStore
@@ -187,6 +197,22 @@ class TaskWorkerCase(WorkerCase):
 
         self.assertIn("已切换", self.client.sent[0][1])
         self.assertEqual(active["id"], session["id"])
+
+    def test_use_session_cannot_switch_to_web_chat(self):
+        from src.sessions import SessionStore
+
+        with patch.dict("os.environ", {"PERSONAL_AGENT_DATA_DIR": str(self.root)}):
+            store = SessionStore()
+            web = store.create("web", "网页私有会话", owner_id="alice")
+            old = store.create("qq", "当前 QQ 会话")
+            store.set_active(7, old["id"])
+            self.enqueue(f"/use {web['id'][:8]}")
+            self.pending("1", intent="use_session")
+            self.task_worker().run_once()
+            active = store.active_session(7)
+
+        self.assertIn("没找到", self.client.sent[0][1])
+        self.assertEqual(active["id"], old["id"])
 
     def test_new_session_command(self):
         with patch.dict("os.environ", {"PERSONAL_AGENT_DATA_DIR": str(self.root)}):
@@ -524,11 +550,11 @@ class ContractCase(WorkerCase):
 
         threads = ThreadStore(self.root / "threads.db")
 
-        from src.qq.onebot import OneBotError
+        from src.qq.transport import QQTransportError
 
         class BrokenClient(FakeClient):
-            def send_private_msg(self, user_id, text):
-                raise OneBotError("send failed")
+            def send_private_msg(self, user_id, text, **kwargs):
+                raise QQTransportError("send failed")
 
         self.enqueue("1+1")
         self.pending("1", intent="ask", params={"question": "1+1"})

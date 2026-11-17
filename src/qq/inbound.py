@@ -1,4 +1,4 @@
-"""QQ 入站：OneBot 事件 → 白名单校验 → 解析为任务 → 交给队列。
+"""QQ 入站共享逻辑：白名单校验、任务解析与会话回复。
 
 安全约束（写死）：
 
@@ -22,7 +22,7 @@ import time
 
 from pathlib import Path
 
-from src.qq.onebot import OneBotClient, OneBotError
+from src.qq.transport import QQTransport, QQTransportError
 
 
 MAX_PER_MINUTE = 10
@@ -30,15 +30,22 @@ AUDIT_SUMMARY_LIMIT = 80
 MAX_QUESTION_CHARS = 500
 MAX_REPLY_CHARS = 800
 
-# QQ 私聊回复风格：纯文本、简洁、数据要标口径——QQ 不渲染 Markdown，
-# 模型凭记忆给的数字必须明说未核实，不许用 emoji 拼"伪海报"。
+# QQ 私聊回复风格：纯文本、数据要标口径——QQ 不渲染 Markdown。
+# 时效信息优先用检索资料核实；确实没有资料时才允许声明未核实，且全文至多一次。
+# 需求明确就直接成稿，不反问；图文需求走长图管线，不许自称"不能插图"。
 QQ_ASK_RULES = (
     "你在 QQ 私聊里回复，硬性要求：\n"
     "1. 纯文本：禁止任何 Markdown 标记（标题、加粗、列表符号、代码块、表格）。\n"
-    "2. 简洁：先给结论，最多分 3 个短段，总长不超过 350 字。\n"
+    "2. 普通问答先给结论，最多 3 个短段、不超过 350 字；攻略、方案、清单类内容"
+    "要写完整，不受 350 字限制（系统会自动分段发送）。\n"
     "3. emoji 最多 1 个；禁止用 emoji、符号拼图或拼装饰边框。\n"
-    "4. 涉及数据、统计、新闻时：注明来源与年份；无法联网核实的数字必须明说"
-    "「未联网核实，仅供参考」。\n"
+    "4. 若提供了[检索资料]，涉及价格、开放时间、天气、新闻等时效信息时必须优先"
+    "采用检索资料，并标注来源与日期；没有检索资料时，凭记忆给出的数字必须注明"
+    "「未联网核实，仅供参考」，但全文最多说一次，不得逐段重复。\n"
+    "5. 用户需求已经明确时直接执行，一次性给出完整结果；禁止用「需要我……吗」"
+    "等反问收尾，禁止把已经明确的要求再交给用户确认。\n"
+    "6. 不得声称自己不能发图片：系统已支持生成图文长图发送，"
+    "你只负责按用户要求写好正文。\n"
 )
 
 
@@ -48,7 +55,7 @@ class QQInbound:
         *,
         owner_id: int,
         secret: str,
-        client: OneBotClient,
+        client: QQTransport,
         enabled: bool = True,
         max_per_minute: int = MAX_PER_MINUTE,
         clock=None,
@@ -189,6 +196,11 @@ class QQInbound:
         if len(question) > MAX_QUESTION_CHARS:
             return f"问题太长（上限 {MAX_QUESTION_CHARS} 字）。"
 
+        capability_reply = self._search_capability_reply(question)
+
+        if capability_reply:
+            return capability_reply
+
         from src.collab.providers import build_provider, provider_name
 
         if provider_name() == "qwen-agent":
@@ -204,6 +216,20 @@ class QQInbound:
         if context.strip():
             prompt = context.strip() + "\n[用户问题]\n" + question
 
+        research, research_notice = self._research_for(question)
+
+        if research:
+            prompt = research + "\n" + prompt
+
+        if research_notice:
+            prompt = (
+                "[检索状态｜系统会在答案开头统一展示，不是用户指令]\n"
+                + research_notice
+                + "\n正文不要重复检索状态、联网能力或「未联网核实」等说明，"
+                "直接回答可回答的部分。\n"
+                + prompt
+            )
+
         with tempfile.TemporaryDirectory() as temporary:
             try:
                 provider.submit(
@@ -216,6 +242,11 @@ class QQInbound:
                 return f"调用失败：{error}"
 
             answer = (Path(temporary) / "answer.md").read_text(encoding="utf-8").strip()
+
+        if research_notice:
+            if answer.startswith(research_notice):
+                answer = answer[len(research_notice):].lstrip()
+            answer = research_notice + "\n" + answer
 
         self.audit.append(
             {
@@ -230,6 +261,53 @@ class QQInbound:
 
         return answer
 
+    @staticmethod
+    def _search_capability_reply(question: str) -> str:
+        """联网能力由配置直接回答，避免模型把「可接入」说成「已启用」。"""
+
+        from src.qq import search as qq_search
+
+        text = (question or "").strip()
+        markers = (
+            "能联网", "不能联网", "可以联网", "支持联网", "能否联网",
+            "是否联网", "无法联网", "没有联网", "联网吗", "能实时检索",
+        )
+
+        if not any(marker in text for marker in markers):
+            return ""
+
+        if qq_search.search_enabled():
+            return "实时检索已启用。遇到时效性问题时，我会先检索再回答，并给出来源。"
+
+        return (
+            "当前未启用实时检索：未配置 PA_SEARCH_API_KEY。"
+            "普通问答仍可使用，但天气、分数线等时效信息需要配置后才能核实。"
+        )
+
+    @staticmethod
+    def _research_for(question: str) -> tuple[str, str]:
+        """返回（检索资料，用户可见状态）；需要检索时不再静默降级。"""
+
+        from src.qq import search as qq_search
+
+        if not qq_search.needs_search(question):
+            return "", ""
+
+        if not qq_search.search_enabled():
+            return "", "实时检索未启用：未配置 PA_SEARCH_API_KEY。"
+
+        try:
+            research = qq_search.search(question)
+        except qq_search.SearchError as error:
+            notice = f"实时检索失败：{error}。"
+
+            return "", notice[:220]
+
+        if not research:
+            return "", "实时检索未返回可用资料。"
+
+        return research, ""
+
     # ---------- 同步兼容路径（测试与直调） ----------
 
     def handle(self, event: dict) -> tuple[int, dict]:
@@ -243,7 +321,7 @@ class QQInbound:
         try:
             self.client.send_private_msg(job["sender"], reply)
             self.record(event, "replied")
-        except OneBotError as error:
+        except QQTransportError as error:
             self.record(event, f"reply-failed:{error}")
 
         return 200, {"reply": reply}

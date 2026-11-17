@@ -75,14 +75,6 @@ async def lifespan(_app: FastAPI):
     except Exception:
         logger.exception("启动对账失败")
 
-    # 小号上线检测：QQ 在线状态翻转时开新会话（configured_workers 未触发前的也覆盖）。
-    try:
-        from src.qq import launch_watcher
-
-        launch_watcher.start()
-    except Exception:
-        logger.exception("小号上线检测启动失败")
-
     # D25：没配令牌就明确说清楚，别让人以为 /v1 已经受保护。
     # 但「设了却全是空白」不算没配 —— 那等于静默关掉认证，必须拒绝启动。
     raw_token = os.getenv(PLATFORM_TOKEN_ENV, "")
@@ -129,9 +121,24 @@ async def lifespan(_app: FastAPI):
     # 弹性控制器 / 趋势采样已随弹性平台抽离（2026-11-13，
     # 见 docs/STATUS-20261107.md §139 与 legacy/README.md）。
 
+    # QQ 官方机器人网关：凭证齐备时启动（出站长连，无公网要求）。
+    try:
+        from src.qq import api as qq_api
+
+        qq_api.start_official_gateway()
+    except Exception:
+        logger.exception("QQ 官方网关启动失败")
+
     try:
         yield
     finally:
+        try:
+            from src.qq import api as qq_api
+
+            qq_api.stop_official_gateway()
+        except Exception:
+            logger.exception("QQ 官方网关停止失败")
+
         stop_watchdog()
         stop_reaper()
 
@@ -462,7 +469,7 @@ app.include_router(inbox_router)
 # 团队任务分配
 app.include_router(teams_router)
 
-# QQ 入站（OneBot 11，仅白名单私聊）
+# QQ 官方机器人入站（仅白名单 C2C 单聊）
 app.include_router(qq_router)
 app.include_router(sessions_router)
 

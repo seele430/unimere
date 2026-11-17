@@ -13,7 +13,7 @@ from src.core.notification_delivery import (
 )
 from src.core.task_engine import init_task_db
 from src.notification import send_notification
-from src.qq.onebot import OneBotError
+from src.qq.transport import QQTransportError
 from src.core.qq_notify import send_qq_notification
 
 
@@ -101,7 +101,7 @@ def process_one_notification():
         else:
             send_notification(message)
 
-    except OneBotError as exc:
+    except QQTransportError as exc:
         next_attempt = attempts + 1
         delay = min(60 * (2 ** min(attempts, 6)), 3600)
         status = "failed" if next_attempt >= 5 else "pending"

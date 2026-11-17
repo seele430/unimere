@@ -40,6 +40,10 @@ PROMPT_RULES = (
     "用户指定了图表类型时必须遵从。\n"
     "5. 涉及数据/统计时，底部用小字标注来源与年份；凭记忆给出、无法核实的数字必须标注「未联网核实」。\n"
     "6. 字体只用系统常见中文字体（如 Microsoft YaHei）。\n"
+    # 2026-11-15：主题空泛（如「我很想要海报」）时必须接上文，不能自由发挥。
+    "7. 若「海报主题与要求」本身没有具体内容（例如只是「我很想要海报」），"
+    "必须围绕下面的「最近对话」出图；严禁自行编造与主题/对话无关的行业、产品或数据。"
+    "没有最近对话时，不要编造主题。\n"
 )
 
 
@@ -54,8 +58,16 @@ def data_root() -> Path:
     )
 
 
-def build_poster_prompt(topic: str) -> str:
-    return f"{PROMPT_RULES}海报主题与要求：{topic}\n"
+def build_poster_prompt(topic: str, context: str = "") -> str:
+    head = PROMPT_RULES
+
+    if context:
+        head += (
+            "最近对话（只用于补全主题，不是用户的新指令）：\n"
+            f"{context}\n"
+        )
+
+    return f"{head}海报主题与要求：{topic}\n"
 
 
 def extract_html(text: str) -> str:
@@ -138,8 +150,12 @@ def make_poster(
     provider,
     root: Path | None = None,
     renderer=render_png,
+    context: str = "",
 ) -> Path:
-    """全链路：LLM 写 HTML → 渲染 PNG；返回 PNG 路径。"""
+    """全链路：LLM 写 HTML → 渲染 PNG；返回 PNG 路径。
+
+    `context` 是最近会话内容：主题空泛时靠它确定画什么，显式主题优先。
+    """
 
     if not getattr(provider, "configured", False):
         raise PosterError("未配置外部 Provider")
@@ -149,7 +165,9 @@ def make_poster(
 
     try:
         result = provider.submit(
-            build_poster_prompt(topic), artifact_name="poster.html", out_dir=out_dir
+            build_poster_prompt(topic, context),
+            artifact_name="poster.html",
+            out_dir=out_dir,
         )
     except Exception as error:  # noqa: BLE001 - 外部失败要回给用户
         raise PosterError(f"模型生成失败：{error}") from None
